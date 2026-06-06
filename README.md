@@ -26,6 +26,5 @@ Building assets often operate blindly regarding grid conditions, leading to inef
 * **[UCI Energy Efficiency Dataset](https://archive.ics.uci.edu/dataset/242/energy+efficiency):** Used to predict heating and cooling loads based on structural attributes.
 * **[Carbon Intensity API](https://carbonintensity.org.uk/):** Used for real-time and forecasted carbon intensity data.
 
-[https://github.com/dr1810/NetZero](https://github.com/dr1810/NetZero)
 README.md
 Displaying README.md.
