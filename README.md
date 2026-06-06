@@ -16,13 +16,13 @@ Building assets often operate blindly regarding grid conditions, leading to inef
 * **Carbon-Aware Computational Engine:** Overlays thermodynamic load predictions with grid carbon trends to determine optimal operational strategies.
 * **Automated Operational Modulation:** Triggers automatic energy-saving protocols when grid carbon intensity crosses user-defined "Carbon Ceilings".
 
-## 🛠 Technology Stack
+## Technology Stack
 * **Backend:** Python, Django REST Framework
 * **Frontend:** Next.js, Tailwind CSS, Recharts, shadcn/ui 
 * **ML/Compute:** PyTorch, CoreML 
 * **Infrastructure:** Supabase (PostgreSQL), GitHub Actions (CI/CD), Vercel 
 
-## 📊 Data Sources
+## Data Sources
 * **[UCI Energy Efficiency Dataset](https://archive.ics.uci.edu/dataset/242/energy+efficiency):** Used to predict heating and cooling loads based on structural attributes.
 * **[Carbon Intensity API](https://carbonintensity.org.uk/):** Used for real-time and forecasted carbon intensity data.
 
