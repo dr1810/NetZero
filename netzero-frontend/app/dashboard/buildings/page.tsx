@@ -1,10 +1,8 @@
-// app/dashboard/buildings/page.tsx
 "use client";
 
 import React, { useState } from "react";
 import { Building2, Plus, Trash2, Edit2, Layers, Cpu, Search } from "lucide-react";
 
-// Mock Data: Building Matrix Profiles matching the 8 UCI Dataset Vector Parameters
 const mockBuildingsMatrix = [
   {
     id: "BLDG-001",

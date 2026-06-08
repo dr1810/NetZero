@@ -3,7 +3,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { ArrowRight, Leaf, Zap, ShieldAlert, Cpu, Building2, User, Sparkles } from "lucide-react";
+import { ArrowRight, Leaf, Zap, ShieldAlert, Cpu, Building2, User, Sparkles, PlusCircle } from "lucide-react";
 
 // Target user segments defined in your architectural proposal
 const personas = [
@@ -38,8 +38,8 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500/10 selection:text-emerald-600 overflow-x-hidden">
       
-      {/* Premium Minimal Navigation Header */}
-      <header className="mx-auto max-w-7xl px-6 lg:px-8 h-20 flex items-center justify-between border-b border-slate-200/60 bg-transparent animate-fade-in">
+      {/* Premium Minimal Navigation Header - Fixed Layering and Hitboxes */}
+      <header className="relative z-50 mx-auto max-w-7xl px-6 lg:px-8 h-20 flex items-center justify-between border-b border-slate-200/60 bg-transparent animate-fade-in">
         {/* Left Side: Brand Identity Logo */}
         <div className="flex items-center gap-2">
           <Leaf className="h-6 w-6 text-emerald-500 fill-emerald-500/10 transition-transform duration-500 hover:rotate-12" />
@@ -48,19 +48,19 @@ export default function LandingPage() {
 
         {/* Right Side: Navigation Triggers */}
         <div className="flex items-center gap-6">
-          {/* Clean Login Gateway Link with Apple-style subtle transition */}
+          {/* Enhanced Sign In Gateway Link */}
           <Link 
             href="/login" 
-            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-50 transition-colors group"
+            className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50"
           >
-            <User className="h-4 w-4 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300 transition-colors duration-300" />
+            <User className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 transition-colors duration-300" />
             <span>Sign In</span>
           </Link>
 
           {/* Primary Action Button */}
           <Link 
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-sans"
+            className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-sans relative z-50"
           >
             Launch Workspace <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
           </Link>
@@ -101,25 +101,27 @@ export default function LandingPage() {
             NetZero fuses structural thermodynamic baseline forecasting with active carbon intensity telemetry, providing actionable operational schedules for smart properties.
           </p>
 
-          {/* Call To Action Controls */}
+          {/* Balanced Call To Action Controls highlighting Digital Twin Initialization */}
           <div 
-            className="mt-10 flex items-center justify-center gap-x-6 opacity-0"
+            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 opacity-0"
             style={{ animation: "slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards" }}
           >
+            {/* Primary Action Path A: New Users build Digital Twins */}
+            <Link
+              href="/login"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Initialize Digital Twin Profile
+            </Link>
+
+            {/* Primary Action Path B: Returning users to Dashboard */}
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
             >
               Enter Control Console <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
-            <a 
-              href="https://github.com/dr1810/NetZero" 
-              target="_blank" 
-              rel="noreferrer"
-              className="text-sm font-semibold leading-6 text-slate-700 hover:text-slate-900 transition-colors duration-300 font-mono relative after:absolute after:bottom-0 after:left-0 after:h-[1px] after:w-0 hover:after:w-full after:bg-slate-900 after:transition-all after:duration-300"
-            >
-              view source code <span aria-hidden="true">→</span>
-            </a>
           </div>
         </div>
 
