@@ -1,11 +1,10 @@
 // app/page.tsx
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, Leaf, Zap, ShieldAlert, Cpu, Building2, User, Sparkles, PlusCircle } from "lucide-react";
 
-// Target user segments defined in your architectural proposal
 const personas = [
   {
     title: "Homeowners",
@@ -27,7 +26,6 @@ const personas = [
   }
 ];
 
-// Core technical capability pillars anchoring the application
 const pillars = [
   { title: "Digital Twin Onboarding", desc: "Transforms physical coordinates into a computable matrix using 8 core structural engineering parameters.", icon: Building2 },
   { title: "Predictive Intensity Tracking", desc: "Ingests 24-hour temporal telemetry forecasts natively from Great Britain's National Grid ESO API stream.", icon: Zap },
@@ -35,20 +33,29 @@ const pillars = [
 ];
 
 export default function LandingPage() {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  // Force the layout to only render once the client environment is 100% ready
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  // Return a clean, empty background container matching your layout theme on the first server pass
+  if (!hasMounted) {
+    return <div className="min-h-screen bg-slate-50" />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500/10 selection:text-emerald-600 overflow-x-hidden">
       
-      {/* Premium Minimal Navigation Header - Fixed Layering and Hitboxes */}
-      <header className="relative z-50 mx-auto max-w-7xl px-6 lg:px-8 h-20 flex items-center justify-between border-b border-slate-200/60 bg-transparent animate-fade-in">
-        {/* Left Side: Brand Identity Logo */}
+      {/* Navigation Header */}
+      <header className="relative z-50 mx-auto max-w-7xl px-6 lg:px-8 h-20 flex items-center justify-between border-b border-slate-200/60 bg-transparent animate-[fadeInEffect_0.4s_ease-out_forwards]">
         <div className="flex items-center gap-2">
           <Leaf className="h-6 w-6 text-emerald-500 fill-emerald-500/10 transition-transform duration-500 hover:rotate-12" />
           <span className="font-bold text-lg tracking-tight">NetZero Cloud</span>
         </div>
 
-        {/* Right Side: Navigation Triggers */}
         <div className="flex items-center gap-6">
-          {/* Enhanced Sign In Gateway Link */}
           <Link 
             href="/login" 
             className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50"
@@ -57,7 +64,6 @@ export default function LandingPage() {
             <span>Sign In</span>
           </Link>
 
-          {/* Primary Action Button */}
           <Link 
             href="/dashboard"
             className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-sans relative z-50"
@@ -67,46 +73,32 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* Hero Layout Container */}
       <main className="relative isolate pt-14">
         
-        {/* Decorative background blur fields mimicking Apple product launches */}
         <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
           <div className="relative left-[calc(50%-11rem)] aspect-1155/678 w-[36.125rem] -translate-x-1/12 rotate-[30deg] bg-gradient-to-tr from-emerald-200 to-emerald-400 opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem] animate-pulse duration-[8s]" />
         </div>
 
         <div className="mx-auto max-w-7xl px-6 lg:px-8 text-center">
           
-          {/* Micro-badge Announcement with an entry fade & slide up */}
-          <div 
-            className="mx-auto mb-6 flex max-w-fit items-center gap-2 rounded-full border border-emerald-200/60 bg-emerald-50/50 px-4 py-1.5 text-xs font-medium text-emerald-700 backdrop-blur-md opacity-0"
-            style={{ animation: "slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards" }}
-          >
+          {/* Micro-badge Announcement */}
+          <div className="mx-auto mb-6 flex max-w-fit items-center gap-2 rounded-full border border-emerald-200/60 bg-emerald-50/50 px-4 py-1.5 text-xs font-medium text-emerald-700 backdrop-blur-md animate-[slideUpEffect_0.6s_ease-out_forwards]">
             <Sparkles className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500/10" />
             <span>Hybrid Edge-Cloud Energy Orchestration Framework</span>
           </div>
 
-          {/* Deep Display Headings with custom staggered delays */}
-          <h1 
-            className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl leading-[1.1] opacity-0"
-            style={{ animation: "slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards" }}
-          >
+          {/* Deep Display Headings */}
+          <h1 className="mx-auto max-w-4xl text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl leading-[1.1] animate-[slideUpEffect_0.6s_ease-out_forwards] [animation-delay:100ms]">
             Bridging Architectural Design with Dynamic Grid Performance
           </h1>
           
-          <p 
-            className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-500 font-normal opacity-0"
-            style={{ animation: "slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s forwards" }}
-          >
+          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-500 font-normal animate-[slideUpEffect_0.6s_ease-out_forwards] [animation-delay:200ms]">
             NetZero fuses structural thermodynamic baseline forecasting with active carbon intensity telemetry, providing actionable operational schedules for smart properties.
           </p>
 
-          {/* Balanced Call To Action Controls highlighting Digital Twin Initialization */}
-          <div 
-            className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 opacity-0"
-            style={{ animation: "slide-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards" }}
-          >
-            {/* Primary Action Path A: New Users build Digital Twins */}
+          {/* Action Row Links */}
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 animate-[slideUpEffect_0.6s_ease-out_forwards] [animation-delay:300ms]">
             <Link
               href="/login"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
@@ -115,7 +107,6 @@ export default function LandingPage() {
               Initialize Digital Twin Profile
             </Link>
 
-            {/* Primary Action Path B: Returning users to Dashboard */}
             <Link
               href="/dashboard"
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
@@ -125,7 +116,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* User Segment Personas Grid Mapping with elegant interaction scale cards */}
+        {/* User Segment Personas Section */}
         <section className="mx-auto max-w-7xl px-6 lg:px-8 mt-32">
           <div className="mx-auto max-w-2xl lg:text-center">
             <h2 className="text-base font-semibold uppercase tracking-wider text-emerald-600">Adaptive Implementations</h2>
@@ -139,8 +130,8 @@ export default function LandingPage() {
               {personas.map((persona, idx) => (
                 <div 
                   key={idx} 
-                  className="flex flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-500 group opacity-0"
-                  style={{ animation: `slide-up 1s cubic-bezier(0.16, 1, 0.3, 1) ${0.4 + idx * 0.15}s forwards` }}
+                  className="flex flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-500 group animate-[slideUpEffect_0.6s_ease-out_forwards]"
+                  style={{ animationDelay: `${400 + idx * 50}ms` }}
                 >
                   <dt className="flex items-center gap-x-3 text-base font-bold leading-7 text-slate-900">
                     <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 transition-colors duration-500 group-hover:bg-emerald-500 group-hover:text-white">
@@ -164,8 +155,6 @@ export default function LandingPage() {
         {/* Technical Architecture Feature Pillars */}
         <section className="mx-auto max-w-7xl px-6 lg:px-8 my-32 sm:my-40">
           <div className="rounded-2xl bg-slate-900 px-6 py-16 sm:p-16 lg:px-20 lg:py-24 shadow-xl border border-slate-800 text-white relative overflow-hidden group">
-            
-            {/* Dark mode mesh gradient animation accent */}
             <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl transition-opacity duration-1000 group-hover:bg-emerald-400/20" />
 
             <div className="relative z-10 max-w-2xl lg:text-left">
@@ -198,22 +187,19 @@ export default function LandingPage() {
 
       </main>
 
-      {/* Embedded Apple Keyframes Animation Styles */}
+      {/* Global CSS Fallback Injectors */}
       <style jsx global>{`
-        @keyframes slide-up {
+        @keyframes slideUpEffect {
           0% {
             opacity: 0;
-            transform: translateY(16px);
+            transform: translateY(10px);
           }
           100% {
             opacity: 1;
             transform: translateY(0);
           }
         }
-        .animate-fade-in {
-          animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-        }
-        @keyframes fade-in {
+        @keyframes fadeInEffect {
           0% { opacity: 0; }
           100% { opacity: 1; }
         }
