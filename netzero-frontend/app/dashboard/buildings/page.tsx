@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Building2, Plus, Layers, Cpu, Search, Loader2 } from "lucide-react";
-import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "../../../lib/api";
+import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
 import NewBuildingModal from "../../../components/NewBuildingModal";
 
 export default function BuildingsInventory() {

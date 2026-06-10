@@ -8,7 +8,6 @@ import os
 from pathlib import Path
 import dj_database_url
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
@@ -66,7 +65,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://your-vercel-app-name.vercel.app",  # ⚠️ REPLACE WITH YOUR ACTUAL LIVE VERCEL PROD URL
+    "https://net-zero-wfy8-e7ca11arz-dr1810s-projects.vercel.app/",  # ⚠️ REPLACE WITH YOUR ACTUAL LIVE VERCEL PROD URL
 ]
 
 ROOT_URLCONF = 'config.urls'

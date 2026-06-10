@@ -3,8 +3,7 @@
 
 import React, { useState } from 'react';
 import { X, Sparkles } from 'lucide-react';
-import { createBuildingProfile, NewBuildingInput } from '../lib/api';
-
+import { createBuildingProfile, NewBuildingInput } from '@/lib/api';
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
