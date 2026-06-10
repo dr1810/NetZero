@@ -1,5 +1,5 @@
 # api/views.py
-import torch
+
 import requests
 from rest_framework import viewsets, status
 from rest_framework.response import Response
@@ -10,6 +10,7 @@ from .serializers import BuildingProfileSerializer, FlexibleAssetSerializer
 # LOCAL PYTORCH THERMODYNAMIC INFERENCE ENGINE
 # -------------------------------------------------------------------------
 def run_thermodynamic_inference(profile: BuildingProfile):
+    import torch
     """
     Feeds the 8 raw architectural dataset features into a local PyTorch tensor matrix
     to estimate structural baselines and thermal insulation properties.
