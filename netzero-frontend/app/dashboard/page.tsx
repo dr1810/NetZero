@@ -1,195 +1,187 @@
-// app/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
-import { ArrowRight, Leaf, Zap, ShieldAlert, Cpu, Building2, User, Sparkles, PlusCircle } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
+import { Building2, Zap, ShieldCheck, AlertCircle, Loader2, ArrowUpRight } from "lucide-react";
 
-const personas = [
-  {
-    title: "Homeowners",
-    description: "Mitigate HVAC cycling traps. Calculate localized thermal inertia to maintain stable indoor temperatures without continuous grid draw.",
-    icon: User,
-    badge: "Thermal Inertia Optimization"
-  },
-  {
-    title: "Small Business Owners",
-    description: "Flatten your facility's operational carbon profile by shifts scheduling high-draw hardware (like commercial ovens) into cleaner energy windows.",
-    icon: Cpu,
-    badge: "Load-Shifting Scheduler"
-  },
-  {
-    title: "Facility Managers",
-    description: "Enforce automated portfolio compliance. Establish maximum daily Carbon Ceilings that throttle secondary architectures during grid stress.",
-    icon: Building2,
-    badge: "Threshold Modulation"
-  }
-];
-
-const pillars = [
-  { title: "Digital Twin Onboarding", desc: "Transforms physical coordinates into a computable matrix using 8 core structural engineering parameters.", icon: Building2 },
-  { title: "Predictive Intensity Tracking", desc: "Ingests 24-hour temporal telemetry forecasts natively from Great Britain's National Grid ESO API stream.", icon: Zap },
-  { title: "Carbon-Aware Processing Engine", desc: "Overlays structural thermal baseline predictions (Model A) against real-time carbon trends (Model B) locally via PyTorch.", icon: ShieldAlert }
-];
-
-export default function LandingPage() {
-  // Explicitly coordinate mounting to eliminate hydration mismatches in Turbopack
-  const [isMounted, setIsMounted] = useState(false);
+export default function DashboardOverview() {
+  const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
+  const [assets, setAssets] = useState<AssetProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsMounted(true);
+    const loadDashboardData = async () => {
+      try {
+        setLoading(true);
+        const [buildingsData, assetsData] = await Promise.all([
+          fetchBuildings(),
+          fetchAssets(),
+        ]);
+        setBuildings(buildingsData);
+        setAssets(assetsData);
+        setError(null);
+      } catch (err: any) {
+        setError(err.message || "Failed to load orchestration metrics.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        <p className="text-sm font-medium text-slate-500 font-sans">Synchronizing system telemetry...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl mt-12 p-6 rounded-2xl border border-red-200 bg-red-50 text-red-800 font-sans">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <h3 className="font-bold text-sm">Data Synchronization Failed</h3>
+        </div>
+        <p className="mt-2 text-xs text-red-700 leading-relaxed">{error}</p>
+        <p className="mt-4 text-[11px] font-mono text-red-500">
+          Verify that your API environment variables are provisioned correctly in Vercel settings.
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-emerald-500/10 selection:text-emerald-600 overflow-x-hidden">
+    <div className="p-6 max-w-7xl mx-auto space-y-8 font-sans animate-fadeIn">
       
-      {/* Premium Minimal Navigation Header */}
-      <header className="relative z-50 mx-auto max-w-7xl px-6 lg:px-8 h-20 flex items-center justify-between border-b border-slate-200/60 bg-transparent">
-        <div className="flex items-center gap-2">
-          <Leaf className="h-6 w-6 text-emerald-500 fill-emerald-500/10 transition-transform duration-500 hover:rotate-12" />
-          <span className="font-bold text-lg tracking-tight">NetZero Cloud</span>
-        </div>
+      {/* Dashboard Top Row Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">System Overview</h1>
+        <p className="text-xs text-slate-500 mt-1">
+          Real-time twin matrix profiling and active load modulation tracks.
+        </p>
+      </div>
 
-        <div className="flex items-center gap-6">
-          <Link 
-            href="/login" 
-            className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50"
-          >
-            <User className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 transition-colors duration-300" />
-            <span>Sign In</span>
-          </Link>
-
-          <Link 
-            href="/dashboard"
-            className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-sans relative z-50"
-          >
-            Launch Workspace <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-          </Link>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <main className="relative isolate pt-14">
-        <div className="absolute inset-x-0 -top-40 -z-10 transform-gpu overflow-hidden blur-3xl sm:-top-80" aria-hidden="true">
-          <div className="relative left-[calc(50%-11rem)] aspect-1155/678 w-[36.125rem] -translate-x-1/12 rotate-[30deg] bg-gradient-to-tr from-emerald-200 to-emerald-400 opacity-20 sm:left-[calc(50%-30rem)] sm:w-[72.1875rem] animate-pulse duration-[8s]" />
-        </div>
-
-        <div className="mx-auto max-w-7xl px-6 lg:px-8 text-center">
-          
-          {/* Micro-badge Announcement */}
-          <div className={`mx-auto mb-6 flex max-w-fit items-center gap-2 rounded-full border border-emerald-200/60 bg-emerald-50/50 px-4 py-1.5 text-xs font-medium text-emerald-700 backdrop-blur-md transition-all duration-700 transform ${
-            isMounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}>
-            <Sparkles className="h-3.5 w-3.5 text-emerald-500 fill-emerald-500/10" />
-            <span>Hybrid Edge-Cloud Energy Orchestration Framework</span>
+      {/* KPI Stats Block Grid */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg bg-emerald-500/10 p-3 text-emerald-600">
+            <Building2 className="h-5 w-5" />
           </div>
-
-          {/* Deep Display Headings with clear reactive layout opacity hooks */}
-          <h1 className={`mx-auto max-w-4xl text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl leading-[1.1] transition-all duration-700 delay-150 transform ${
-            isMounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}>
-            Bridging Architectural Design with Dynamic Grid Performance
-          </h1>
-          
-          <p className={`mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-500 font-normal transition-all duration-700 delay-300 transform ${
-            isMounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}>
-            NetZero fuses structural thermodynamic baseline forecasting with active carbon intensity telemetry, providing actionable operational schedules for smart properties.
-          </p>
-
-          {/* Balanced Call To Action Controls */}
-          <div className={`mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 transition-all duration-700 delay-450 transform ${
-            isMounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-          }`}>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-500 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
-            >
-              <PlusCircle className="h-4 w-4" />
-              Initialize Digital Twin Profile
-            </Link>
-
-            <Link
-              href="/dashboard"
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
-            >
-              Enter Control Console <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Link>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Digital Twins</p>
+            <h3 className="text-xl font-bold text-slate-900 mt-0.5">{buildings.length}</h3>
           </div>
         </div>
 
-        {/* User Segment Personas Grid Mapping */}
-        <section className="mx-auto max-w-7xl px-6 lg:px-8 mt-32">
-          <div className="mx-auto max-w-2xl lg:text-center">
-            <h2 className="text-base font-semibold uppercase tracking-wider text-emerald-600">Adaptive Implementations</h2>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-              Targeted Operational Mitigations
-            </p>
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg bg-blue-500/10 p-3 text-blue-600">
+            <Zap className="h-5 w-5" />
           </div>
-
-          <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-none">
-            <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-16 lg:max-w-none lg:grid-cols-3">
-              {personas.map((persona, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex flex-col rounded-2xl border border-slate-200 bg-white p-8 shadow-sm hover:shadow-xl hover:-translate-y-1 hover:border-emerald-500/20 transition-all duration-500 group ${
-                    isMounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-                  }`}
-                  style={{ transitionDelay: `${500 + idx * 100}ms` }}
-                >
-                  <dt className="flex items-center gap-x-3 text-base font-bold leading-7 text-slate-900">
-                    <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-600 transition-colors duration-500 group-hover:bg-emerald-500 group-hover:text-white">
-                      <persona.icon className="h-5 w-5" aria-hidden="true" />
-                    </div>
-                    {persona.title}
-                  </dt>
-                  <dd className="mt-4 flex flex-auto flex-col text-sm leading-relaxed text-slate-500 font-normal">
-                    <p className="flex-auto">{persona.description}</p>
-                    <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
-                      <span className="text-[11px] font-bold font-mono tracking-wide uppercase text-slate-400">Core Protocol</span>
-                      <span className="rounded-md bg-slate-50 border border-slate-200/60 px-2 py-0.5 text-[11px] font-semibold text-slate-600 group-hover:bg-emerald-50 group-hover:text-emerald-700 group-hover:border-emerald-200/40 transition-colors duration-500">{persona.badge}</span>
-                    </div>
-                  </dd>
-                </div>
-              ))}
-            </dl>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Monitored Assets</p>
+            <h3 className="text-xl font-bold text-slate-900 mt-0.5">{assets.length}</h3>
           </div>
-        </section>
+        </div>
 
-        {/* Technical Architecture Feature Pillars */}
-        <section className="mx-auto max-w-7xl px-6 lg:px-8 my-32 sm:my-40">
-          <div className="rounded-2xl bg-slate-900 px-6 py-16 sm:p-16 lg:px-20 lg:py-24 shadow-xl border border-slate-800 text-white relative overflow-hidden group">
-            <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl transition-opacity duration-1000 group-hover:bg-emerald-400/20" />
+        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm flex items-center gap-4">
+          <div className="rounded-lg bg-indigo-500/10 p-3 text-indigo-600">
+            <ShieldCheck className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Engine Pipeline</p>
+            <h3 className="text-xs font-semibold text-emerald-600 mt-1.5 flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              Active Edge
+            </h3>
+          </div>
+        </div>
+      </div>
 
-            <div className="relative z-10 max-w-2xl lg:text-left">
-              <h2 className="text-xs font-bold font-mono uppercase tracking-widest text-emerald-400">Pipeline Blueprints</h2>
-              <p className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">
-                Core Computational Pillars
-              </p>
-              <p className="mt-4 text-sm text-slate-400 max-w-lg leading-relaxed">
-                The full framework architecture coordinates local machine learning inferences simultaneously against external energy API pipelines.
-              </p>
+      {/* Database Split View Layout Tables */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        
+        {/* Left Side: Buildings List */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-slate-400" /> Building Matrices
+            </h2>
+            <ArrowUpRight className="h-4 w-4 text-slate-400" />
+          </div>
+          {buildings.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-4">No active building profiles recorded.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-medium">
+                    <th className="pb-2">Postcode</th>
+                    <th className="pb-2">Surface Area</th>
+                    <th className="pb-2">Base Load</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-slate-600">
+                  {buildings.map((b) => (
+                    <tr key={b.id} className="hover:bg-slate-50/40">
+                      <td className="py-2.5 font-semibold text-slate-800">{b.postcode}</td>
+                      <td className="py-2.5">{b.surface_area} m²</td>
+                      <td className="py-2.5 font-mono text-slate-500">{b.calculated_base_load_kw} kW</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          )}
+        </div>
 
-            <div className="mx-auto mt-16 max-w-2xl lg:mt-20 lg:max-w-none">
-              <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-12 lg:max-w-none lg:grid-cols-3">
-                {pillars.map((pillar, idx) => (
-                  <div key={idx} className="relative pl-12 group/pillar">
-                    <dt className="text-base font-bold text-white flex items-center gap-2">
-                      <div className="absolute left-0 top-0 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500 text-white shadow transition-transform duration-500 group-hover/pillar:scale-110">
-                        <pillar.icon className="h-4 w-4" aria-hidden="true" />
-                      </div>
-                      {pillar.title}
-                    </dt>
-                    <dd className="mt-2 text-xs leading-relaxed text-slate-400 font-normal">{pillar.desc}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+        {/* Right Side: Flexible Assets List */}
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Zap className="h-4 w-4 text-slate-400" /> Flexible Registries
+            </h2>
+            <ArrowUpRight className="h-4 w-4 text-slate-400" />
           </div>
-        </section>
+          {assets.length === 0 ? (
+            <p className="text-xs text-slate-400 italic py-4">No active flexible hardware registered.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-medium">
+                    <th className="pb-2">Asset Identifier</th>
+                    <th className="pb-2">Electrical Max</th>
+                    <th className="pb-2">Modulation</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50 text-slate-600">
+                  {assets.map((a) => (
+                    <tr key={a.id} className="hover:bg-slate-50/40">
+                      <td className="py-2.5 font-semibold text-slate-800">{a.name}</td>
+                      <td className="py-2.5 font-mono text-slate-500">{a.electrical_capacity_kw} kW</td>
+                      <td className="py-2.5">
+                        <span className={`inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium ring-1 ring-inset ${
+                          a.is_modulated_active 
+                            ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20' 
+                            : 'bg-slate-50 text-slate-600 ring-slate-500/10'
+                        }`}>
+                          {a.is_modulated_active ? 'Active modulation' : 'Standby'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-      </main>
+      </div>
     </div>
   );
 }
