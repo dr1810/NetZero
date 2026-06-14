@@ -3,8 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
 import { Building2, Zap, ShieldCheck, AlertCircle, Loader2, ArrowUpRight, Plus } from "lucide-react";
-import NewBuildingModal from "@/components/NewBuildingModal"; 
-
+import NewBuildingModal from "@/components/NewBuildingModal";
 export default function DashboardOverview() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [assets, setAssets] = useState<AssetProfile[]>([]);
