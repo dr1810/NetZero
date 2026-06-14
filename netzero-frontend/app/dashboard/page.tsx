@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
+import { fetchBuildings, fetchAssets, deleteBuilding, BuildingProfile, AssetProfile } from "@/lib/api";
 import { 
   Building2, 
   Zap, 
@@ -14,7 +14,7 @@ import {
   Activity, 
   Layers 
 } from "lucide-react";
-import NewBuildingModal from "@/components/NewBuildingModal"; // Adjust based on your folder structure
+import NewBuildingModal from "@/components/NewBuildingModal";
 
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
@@ -37,6 +37,17 @@ export default function DashboardPage() {
       setError(err.message || "Failed to load matrix telemetry inventory.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this structural twin?")) return;
+    
+    try {
+      await deleteBuilding(id);
+      await loadDashboardData(); // Refreshes table after deletion
+    } catch (err: any) {
+      alert("Error deleting building: " + err.message);
     }
   };
 
@@ -189,7 +200,6 @@ export default function DashboardPage() {
                 const heightPercentage = ((b.surface_area || 0) / maxSurfaceArea) * 85;
                 return (
                   <div key={b.id} className="flex flex-col items-center h-full justify-end group relative w-full px-1">
-                    {/* Tooltip visualization pop */}
                     <div className="absolute bottom-full mb-1 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[9px] px-1.5 py-0.5 rounded font-mono pointer-events-none whitespace-nowrap z-10">
                       {b.surface_area} m²
                     </div>
@@ -217,9 +227,6 @@ export default function DashboardPage() {
             <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Building2 className="h-4 w-4 text-slate-400" /> Core Twin Specifications
             </h2>
-            <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md">
-              {buildings.length} Total
-            </span>
           </div>
           {buildings.length === 0 ? (
             <p className="text-xs text-slate-400 italic py-6 text-center">No structural matrix rows initialized.</p>
@@ -230,17 +237,26 @@ export default function DashboardPage() {
                   <tr className="border-b border-slate-100 text-slate-400 font-medium">
                     <th className="pb-2.5">Target Location</th>
                     <th className="pb-2.5">Surface Area</th>
-                    <th className="pb-2.5">Height Axis</th>
-                    <th className="pb-2.5 text-right">Base Load Matrix</th>
+                    <th className="pb-2.5 text-right">Base Load</th>
+                    <th className="pb-2.5 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-600">
                   {buildings.map((b) => (
-                    <tr key={b.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={b.id} className="group hover:bg-slate-50/50 transition-colors">
                       <td className="py-3 font-semibold text-slate-800 font-mono">{b.postcode}</td>
                       <td className="py-3">{b.surface_area} m²</td>
-                      <td className="py-3 text-slate-500">{b.overall_height} m</td>
-                      <td className="py-3 font-mono text-emerald-600 font-bold text-right">{b.calculated_base_load_kw?.toFixed(2)} kW</td>
+                      <td className="py-3 font-mono text-emerald-600 font-bold text-right">
+                        {b.calculated_base_load_kw?.toFixed(2)} kW
+                      </td>
+                      <td className="py-3 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                          onClick={() => handleDelete(b.id)}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded-md"
+                        >
+                          DELETE
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -294,7 +310,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal Popup Management Portal */}
       <NewBuildingModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 

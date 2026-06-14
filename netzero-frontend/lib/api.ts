@@ -74,3 +74,15 @@ export const createBuildingProfile = async (payload: NewBuildingInput) => {
   }
   return res.json();
 };
+
+export const deleteBuilding = async (id: number) => {
+  const res = await fetch(`${DJANGO_BASE_URL}/buildings/${id}/`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+  });
+  
+  if (!res.ok) {
+    throw new Error(`Failed to delete building profile: ${res.statusText}`);
+  }
+  return true;
+};
