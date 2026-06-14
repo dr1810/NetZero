@@ -86,3 +86,18 @@ export const deleteBuilding = async (id: number) => {
   }
   return true;
 };
+
+export const emailReport = async (id: number) => {
+  const res = await fetch(
+    `${DJANGO_BASE_URL}/buildings/${id}/email_report/`,
+    {
+      method: "POST",
+    }
+  );
+
+  if (!res.ok) {
+    throw new Error("Failed to send report.");
+  }
+
+  return res.json();
+};

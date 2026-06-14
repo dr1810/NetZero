@@ -1,6 +1,10 @@
 # api/views.py
 
+import os
 import requests
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import BuildingProfile, FlexibleAsset
@@ -41,6 +45,32 @@ def run_thermodynamic_inference(profile: BuildingProfile):
 # -------------------------------------------------------------------------
 # REST VIEWSETS INTERFACES
 # -------------------------------------------------------------------------
+def send_sustainability_report(email, report_text):
+    api_key = os.environ.get("RESEND_API_KEY")
+
+    if not api_key:
+        return False
+
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "from": "NetZero <onboarding@resend.dev>",
+            "to": [email],
+            "subject": "NetZero Sustainability Report",
+            "text": report_text,
+        },
+        timeout=10,
+    )
+
+    print("RESEND STATUS:", response.status_code)
+    print("RESEND RESPONSE:", response.text)
+
+    return response.status_code in [200, 201]
+
 class BuildingProfileViewSet(viewsets.ModelViewSet):
     """
     Handles thermodynamic twin onboarding validations, National Grid regional lookups,
@@ -113,7 +143,97 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED
         )
+    @action(detail=True, methods=["post"])
+    def email_report(self, request, pk=None):
+        building = self.get_object()
 
+        report = f"""
+    NETZERO SUSTAINABILITY REPORT
+
+    ========================================
+    BUILDING INFORMATION
+    ========================================
+
+    Email:
+    {building.user_email}
+
+    Postcode:
+    {building.postcode}
+
+    Grid Zone:
+    {building.grid_zone_id}
+
+    ========================================
+    THERMODYNAMIC ANALYSIS
+    ========================================
+
+    Calculated Base Load:
+    {building.calculated_base_load_kw:.2f} kW
+
+    Thermal Inertia Coefficient:
+    {building.thermal_inertia_coefficient:.3f}
+
+    ========================================
+    STRUCTURAL PROFILE
+    ========================================
+
+    Relative Compactness:
+    {building.relative_compactness}
+
+    Surface Area:
+    {building.surface_area} m²
+
+    Wall Area:
+    {building.wall_area} m²
+
+    Roof Area:
+    {building.roof_area} m²
+
+    Overall Height:
+    {building.overall_height} m
+
+    Orientation:
+    {building.orientation}
+
+    Glazing Area:
+    {building.glazing_area}
+
+    Glazing Distribution:
+    {building.glazing_area_distribution}
+
+    ========================================
+    SUSTAINABILITY RECOMMENDATION
+    ========================================
+
+    NetZero recommends shifting flexible
+    electrical loads toward lower-carbon
+    operating windows whenever regional
+    carbon intensity decreases.
+
+    This report was generated automatically
+    by the NetZero Carbon-Aware Optimization
+    Platform.
+    """
+
+        success = send_sustainability_report(
+            building.user_email,
+            report
+        )
+
+        if success:
+            return Response(
+                {
+                    "status": "REPORT_SENT",
+                    "recipient": building.user_email,
+                    "building_profile_id": building.id
+                },
+                status=status.HTTP_200_OK
+            )
+
+        return Response(
+            {"status": "EMAIL_FAILED"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):
     """
@@ -121,3 +241,4 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
     """
     queryset = FlexibleAsset.objects.all()
     serializer_class = FlexibleAssetSerializer
+

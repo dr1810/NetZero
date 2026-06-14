@@ -1,7 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchBuildings, fetchAssets, deleteBuilding, BuildingProfile, AssetProfile } from "@/lib/api";
+import {
+  fetchBuildings,
+  fetchAssets,
+  deleteBuilding,
+  emailReport,
+  BuildingProfile,
+  AssetProfile,
+} from "@/lib/api";
 import { 
   Building2, 
   Zap, 
@@ -50,6 +57,21 @@ export default function DashboardPage() {
       alert("Error deleting building: " + err.message);
     }
   };
+
+  const handleEmailReport = async (id: number) => {
+  try {
+    const result = await emailReport(id);
+
+    alert(
+      `Sustainability report successfully sent to ${result.recipient}`
+    );
+  } catch (err: any) {
+    alert(
+      "Failed to send sustainability report: " +
+      err.message
+    );
+  }
+};
 
   useEffect(() => {
     loadDashboardData();
@@ -238,7 +260,7 @@ export default function DashboardPage() {
                     <th className="pb-2.5">Target Location</th>
                     <th className="pb-2.5">Surface Area</th>
                     <th className="pb-2.5 text-right">Base Load</th>
-                    <th className="pb-2.5 text-right">Action</th>
+                    <th className="pb-2.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-600">
@@ -249,13 +271,24 @@ export default function DashboardPage() {
                       <td className="py-3 font-mono text-emerald-600 font-bold text-right">
                         {b.calculated_base_load_kw?.toFixed(2)} kW
                       </td>
-                      <td className="py-3 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                          onClick={() => handleDelete(b.id)}
-                          className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded-md"
-                        >
-                          DELETE
-                        </button>
+                      <td className="py-3 text-right">
+                        <div className="flex justify-end gap-2">
+
+                          <button
+                            onClick={() => handleEmailReport(b.id)}
+                            className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md"
+                          >
+                            EMAIL REPORT
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(b.id)}
+                            className="text-[10px] font-bold text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded-md"
+                          >
+                            DELETE
+                          </button>
+
+                        </div>
                       </td>
                     </tr>
                   ))}
