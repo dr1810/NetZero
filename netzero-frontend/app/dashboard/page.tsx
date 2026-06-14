@@ -14,7 +14,7 @@ import {
   Activity, 
   Layers 
 } from "lucide-react";
-import NewBuildingModal from "@/components/NewBuildingForm"; // Adjust based on your folder structure
+import NewBuildingModal from "@/components/NewBuildingModal"; // Adjust based on your folder structure
 
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
