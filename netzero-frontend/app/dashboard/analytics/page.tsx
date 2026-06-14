@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -11,9 +12,7 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  Legend, 
-  AreaChart, 
-  Area 
+  Legend 
 } from "recharts";
 import { 
   TrendingDown, 
@@ -22,38 +21,89 @@ import {
   Cpu, 
   Sparkles, 
   Activity, 
-  ShieldCheck 
+  ShieldCheck,
+  Loader2,
+  AlertCircle
 } from "lucide-react";
 
-// --- Mock Datasets matching the Great Britain National Grid ESO API Streams ---
-const telemetryForecastData = [
-  { time: "00:00", gridIntensity: 180, modelBaseline: 140, optimizedDraw: 120 },
-  { time: "04:00", gridIntensity: 195, modelBaseline: 145, optimizedDraw: 120 },
-  { time: "08:00", gridIntensity: 240, modelBaseline: 160, optimizedDraw: 150 }, // Peak Grid Stress
-  { time: "12:00", gridIntensity: 150, modelBaseline: 155, optimizedDraw: 110 }, // High Renewable Mix
-  { time: "16:00", gridIntensity: 210, modelBaseline: 165, optimizedDraw: 140 },
-  { time: "20:00", gridIntensity: 265, modelBaseline: 170, optimizedDraw: 160 }, // Peak Grid Stress
-  { time: "23:59", gridIntensity: 170, modelBaseline: 135, optimizedDraw: 115 },
-];
-
-const buildingEfficiencyMatrix = [
-  { name: "Asset DB_01", structuralLoss: 4.2, carbonCeiling: 120 },
-  { name: "Asset DB_02", structuralLoss: 2.8, carbonCeiling: 95 },
-  { name: "Asset DB_03", structuralLoss: 5.1, carbonCeiling: 160 },
-  { name: "Asset DB_04", structuralLoss: 1.2, carbonCeiling: 50 }, // Your newly added EC1A1BB twin!
-];
-
 export default function AnalyticsPage() {
+  const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
+  const [assets, setAssets] = useState<AssetProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // --- What-If Retrofit Sandbox State Controls ---
   const [glazingUValue, setGlazingUValue] = useState<number>(1.2);
   const [hvacEfficiency, setHvacEfficiency] = useState<number>(85);
 
-  // Dynamic calculations simulating your PyTorch Edge Inference layer adjustments
+  useEffect(() => {
+    const loadAnalyticsData = async () => {
+      try {
+        setLoading(true);
+        const [buildingsData, assetsData] = await Promise.all([
+          fetchBuildings(),
+          fetchAssets(),
+        ]);
+        setBuildings(buildingsData);
+        setAssets(assetsData);
+        setError(null);
+      } catch (err: any) {
+        setError(err.message || "Failed to stream live telemetry from matrix inventory.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAnalyticsData();
+  }, []);
+
+  // --- Live Metrics Computations Driven by API Inventory ---
+  const totalBaseLoad = buildings.reduce((acc, b) => acc + (b.calculated_base_load_kw || 0), 0);
+  const totalAssetCapacity = assets.reduce((acc, a) => acc + (a.electrical_capacity_kw || 0), 0);
+  
+  // Dynamic calculations simulating your PyTorch Edge Inference layer adjustments based on inventory values
+  const averageSurfaceArea = buildings.reduce((acc, b) => acc + (b.surface_area || 150), 0) / Math.max(buildings.length, 1);
   const calculatedCarbonMitigation = ((1.2 - glazingUValue) * 15 + (hvacEfficiency - 85) * 0.8).toFixed(1);
-  const projectedGridStressBuffer = (parseFloat(calculatedCarbonMitigation) * 1.34).toFixed(1);
+  const projectedGridStressBuffer = (parseFloat(calculatedCarbonMitigation) * (averageSurfaceArea / 120)).toFixed(1);
+
+  // --- Mapping API Telemetry into Recharts Visual Containers ---
+  // Chart 1: Building Profile Thermal Multipliers against calculated base loads
+  const structuralMatrixData = buildings.map((b) => ({
+    name: b.postcode || `Twin #${b.id}`,
+    "Thermal Infiltration Multiplier": b.relative_compactness ? b.relative_compactness * 5 : 3.5,
+    "Calculated Base Load (kW)": b.calculated_base_load_kw || 0,
+  }));
+
+  // Chart 2: Flexible Hardware Capacities grouped by asset registry configurations
+  const assetCapacityMatrixData = assets.map((a) => ({
+    name: a.name || `Asset #${a.id}`,
+    "Capacity (kW)": a.electrical_capacity_kw || 0,
+    "Modulation Weight": a.is_modulated_active ? 100 : 30,
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[70vh] flex-col items-center justify-center gap-3">
+        <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        <p className="text-sm font-medium text-slate-500 font-sans tracking-tight">Synchronizing analytics pipeline streams...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-2xl mt-12 p-6 rounded-2xl border border-red-200 bg-red-50 text-red-800 font-sans">
+        <div className="flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <h3 className="font-bold text-sm">Telemetry Pipeline Halted</h3>
+        </div>
+        <p className="mt-2 text-xs text-red-700 leading-relaxed">{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 lg:p-8 space-y-8 animate-fade-in text-slate-900 selection:bg-emerald-500/10 selection:text-emerald-600">
+    <div className="min-h-screen bg-slate-50 p-6 lg:p-8 space-y-8 text-slate-900 font-sans">
       
       {/* Dashboard Section Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-200/60 pb-5">
@@ -64,26 +114,26 @@ export default function AnalyticsPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Grid Analytics Console</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Cross-referencing thermodynamic building twins with active National Grid intensity metrics.
+            Cross-referencing thermodynamic building twins with active infrastructure intensity metrics.
           </p>
         </div>
         
         {/* Active System Status Toggles */}
-        <div className="flex items-center gap-3 self-start md:self-center bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-          <span className="text-xs font-semibold text-slate-600 font-sans">PyTorch Core Inferences Live</span>
+        <div className="flex items-center gap-3 bg-white border border-slate-200 px-4 py-2 rounded-xl shadow-sm">
+          <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-semibold text-slate-600 font-mono">PyTorch Live Streams Connected</span>
         </div>
       </div>
 
-      {/* --- Top Row Performance Metrics Cards --- */}
+      {/* --- Top Row Performance Metrics Cards (Live Computations) --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex items-center gap-4">
           <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-xl">
             <Zap className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Current Grid Bias</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">212 gCO₂/kWh</h3>
+            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Aggregated Base Load</p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalBaseLoad.toFixed(2)} kW</h3>
           </div>
         </div>
 
@@ -92,8 +142,8 @@ export default function AnalyticsPage() {
             <Cpu className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Edge Shift Window</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">11:30 - 14:15</h3>
+            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Total Flex Asset Pool</p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalAssetCapacity.toFixed(1)} kW</h3>
           </div>
         </div>
 
@@ -102,59 +152,68 @@ export default function AnalyticsPage() {
             <TrendingDown className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Active Carbon Avoided</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">18.42% Daily Saved</h3>
+            <p className="text-xs font-medium text-slate-400 font-mono tracking-wider uppercase">Active Twin Subsystems</p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{buildings.length} Matrix Profiles</h3>
           </div>
         </div>
       </div>
 
-      {/* --- Middle Row: Primary Chart Analytics Framework --- */}
+      {/* --- Middle Row: Live Chart Analytics Framework --- */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
-        {/* Card 1: 24-Hour Intensity Forecast Line Plot */}
+        {/* Card 1: Building Thermal Metrics Line Plot */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">National Grid Intensity Tracking</h2>
-            <p className="text-xs text-slate-400 mt-0.5 mb-6">Model A (Thermodynamic Infiltration) vs Model B (Grid Intensity Matrix)</p>
+            <h2 className="text-base font-bold text-slate-900">Thermodynamic Infiltration Multipliers</h2>
+            <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating calculated building structural baseline loads from live twin vectors.</p>
           </div>
           
-          {/* PARENT CONTAINER FIXED HEIGHT FOR RECHARTS IN NEXT.JS TURBOPACK */}
           <div className="w-full h-[320px] pr-4 text-xs font-mono">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={telemetryForecastData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="time" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip />
-                <Legend wrapperStyle={{ paddingTop: "15px" }} />
-                <Line type="monotone" dataKey="gridIntensity" name="Grid carbon intensity" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="modelBaseline" name="Model A thermal load" stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="optimizedDraw" name="Optimized consumption profile" stroke="#10b981" strokeWidth={2.5} />
-              </LineChart>
-            </ResponsiveContainer>
+            {buildings.length === 0 ? (
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
+                No active digital twin configurations discovered to plot line analytics.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={structuralMatrixData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ paddingTop: "15px" }} />
+                  <Line type="monotone" dataKey="Calculated Base Load (kW)" name="Base Load (kW)" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="Thermal Infiltration Multiplier" name="Infiltration Index" stroke="#3b82f6" strokeWidth={2} strokeDasharray="4 4" />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
         {/* Card 2: Digital Twin Matrix Asset Distribution Bar Chart */}
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
-            <h2 className="text-base font-bold text-slate-900">Structural Twin Matrix Calibration</h2>
-            <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating localized structural thermal loss variables against carbon target caps.</p>
+            <h2 className="text-base font-bold text-slate-900">Flexible Hardware Capacity Analysis</h2>
+            <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating localized flexible registry capacity thresholds from hardware records.</p>
           </div>
 
-          {/* PARENT CONTAINER FIXED HEIGHT FOR RECHARTS IN NEXT.JS TURBOPACK */}
           <div className="w-full h-[320px] pr-4 text-xs font-mono">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={buildingEfficiencyMatrix}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip />
-                <Legend wrapperStyle={{ paddingTop: "15px" }} />
-                <Bar dataKey="structuralLoss" name="Thermal infiltration multiplier" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="carbonCeiling" name="Daily ceiling limit (kg)" fill="#10b981" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {assets.length === 0 ? (
+              <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
+                Awaiting active modular edge assets to generate calibration charts.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={assetCapacityMatrixData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="name" stroke="#94a3b8" />
+                  <YAxis stroke="#94a3b8" />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ paddingTop: "15px" }} />
+                  <Bar dataKey="Capacity (kW)" name="Capacity (kW)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Modulation Weight" name="Modulation Stability" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -219,7 +278,7 @@ export default function AnalyticsPage() {
 
         {/* Predictive Impact Output Column */}
         <div className="flex flex-col justify-between bg-slate-900 rounded-xl p-6 text-white relative overflow-hidden group">
-          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl group-hover:bg-emerald-500/20 transition-all duration-700" />
+          <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl" />
           
           <div className="relative z-10">
             <div className="flex items-center gap-1.5 text-[10px] font-bold font-mono tracking-widest uppercase text-emerald-400 mb-2">
@@ -227,7 +286,7 @@ export default function AnalyticsPage() {
               <span>Projected Matrix Yield</span>
             </div>
             <h3 className="text-sm font-medium text-slate-300 leading-relaxed">
-              Modulating your structural enclosure parameters shifts your overall digital twin framework allocation into clean grid periods.
+              Modulating your structural enclosure parameters shifts your overall digital twin framework allocation cleanly into low-bias periods.
             </h3>
           </div>
 
@@ -244,7 +303,7 @@ export default function AnalyticsPage() {
               <p className="text-[10px] font-bold font-mono text-slate-400 uppercase tracking-wider">Estimated Local Storage Buffer</p>
               <div className="flex items-baseline gap-1 mt-0.5">
                 <span className="text-xl font-bold text-white">+{projectedGridStressBuffer} kW</span>
-                <span className="text-xs font-medium text-slate-400">Thermal Inertia Capacity</span>
+                <span className="text-xs font-medium text-slate-400">Thermal Capacity</span>
               </div>
             </div>
           </div>
@@ -259,12 +318,12 @@ export default function AnalyticsPage() {
             </div>
             <h4 className="text-sm font-bold text-slate-900">GB Grid Integration Audit</h4>
             <p className="text-xs text-slate-500 leading-relaxed">
-              If this simulated structural baseline configuration is fully compiled, your complete building architecture drops below the regional carbon penalties matrix safely.
+              When these customized structural parameters are processed against the network matrices, your digital infrastructure validates compliance automatically.
             </p>
           </div>
 
           <div className="bg-slate-50 border border-slate-200/60 rounded-lg p-3 text-[11px] font-mono text-slate-500 mt-4">
-            <span className="font-bold text-slate-700">Inference Status:</span> Compliant with carbon thresholds configured inside your <code className="text-emerald-600 bg-emerald-50 px-1 rounded font-semibold">config/settings.py</code> matrix array bounds.
+            <span className="font-bold text-slate-700">Inference Status:</span> Dynamic scaling targets active based on calculations with live inventory array counts.
           </div>
         </div>
 

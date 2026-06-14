@@ -44,7 +44,15 @@ export interface AssetProfile {
 
 export const fetchBuildings = async (): Promise<BuildingProfile[]> => {
   const res = await fetch(`${DJANGO_BASE_URL}/buildings/`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to retrieve building matrix records.');
+  
+  if (!res.ok) {
+    // Log the actual error response from Django
+    const errorData = await res.text(); 
+    console.error(`API Error ${res.status}:`, errorData);
+    
+    throw new Error(`Failed to retrieve building matrix records: ${res.status} ${res.statusText}`);
+  }
+  
   return res.json();
 };
 

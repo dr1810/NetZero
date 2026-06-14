@@ -1,21 +1,50 @@
-// app/login/page.tsx
 "use client";
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Leaf, ArrowRight, Building2, MapPin, ShieldCheck, HelpCircle } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { Leaf, ArrowRight, Building2, MapPin, ShieldCheck, HelpCircle, Loader2, AlertCircle } from "lucide-react";
+
+const AVAILABLE_POSTCODES = [
+  // --- London Area ---
+  { code: "EC1A 1BB", label: "EC1A 1BB - London Central" },
+  { code: "E16 4AN", label: "E16 4AN - London Docklands" },
+  
+  // --- Scotland Regions ---
+  { code: "IV1 1SG", label: "IV1 1SG - North Scotland (Highlands)" },
+  { code: "EH1 1RE", label: "EH1 1RE - South Scotland (Edinburgh)" },
+  { code: "G1 1HX", label: "G1 1HX - South Scotland (Glasgow)" },
+  
+  // --- Northern & Central England ---
+  { code: "M1 1AE", label: "M1 1AE - North West England (Manchester)" },
+  { code: "NE1 1EN", label: "NE1 1EN - North East England (Newcastle)" },
+  { code: "S1 2BP", label: "S1 2BP - South Yorkshire (Sheffield)" },
+  { code: "B1 1TF", label: "B1 1TF - West Midlands (Birmingham)" },
+  { code: "NG1 1AA", label: "NG1 1AA - East Midlands (Nottingham)" },
+  
+  // --- Wales ---
+  { code: "LL11 1AY", label: "LL11 1AY - North Wales & Merseyside" },
+  { code: "CF10 1EP", label: "CF10 1EP - South Wales (Cardiff)" },
+  
+  // --- Eastern & Southern England ---
+  { code: "CB1 1PT", label: "CB1 1PT - East England (Cambridge)" },
+  { code: "BS1 5TR", label: "BS1 5TR - South West England (Bristol)" },
+  { code: "SO14 3FE", label: "SO14 3FE - Southern England (Southampton)" },
+  { code: "BN1 1GE", label: "BN1 1GE - South East England (Brighton)" }
+];
 
 export default function OnboardingGateway() {
   const router = useRouter();
+  const { login } = useAuth();
+  
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Structural Vector Fields & API Hook variables matching your PyTorch + Grid ESO specifications
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     postcode: "EC1A 1BB",
-    // The 8 explicit parameters from the UCI Energy Efficiency specification required by Model A
     relativeCompactness: "0.98",
     surfaceArea: "514.50",
     wallArea: "294.00",
@@ -31,15 +60,66 @@ export default function OnboardingGateway() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
-    // Simulate pipeline synchronization and route into the main operational hub
-    setTimeout(() => {
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+    try {
+      if (isSignUp) {
+        // --- SIGN UP & INITIALIZE TWIN MODEL FLOW ---
+        // Path corrected to /api/auth/register/
+        const registrationResponse = await fetch(`${baseUrl}/api/auth/register/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            postcode: formData.postcode,
+            relative_compactness: parseFloat(formData.relativeCompactness),
+            surface_area: parseFloat(formData.surfaceArea),
+            wall_area: parseFloat(formData.wallArea),
+            roof_area: parseFloat(formData.roofArea),
+            overall_height: parseFloat(formData.overallHeight),
+            orientation: parseInt(formData.orientation),
+            glazing_area: parseFloat(formData.glazingArea),
+            glazing_area_distribution: parseInt(formData.glazingAreaDistribution),
+          }),
+        });
+
+        if (!registrationResponse.ok) {
+          const errData = await registrationResponse.json().catch(() => ({}));
+          throw new Error(errData.detail || "Failed to initialize new structural asset twin profile.");
+        }
+
+        const authData = await registrationResponse.json();
+        login(authData.access || authData.token);
+      } else {
+        // --- ACCESS CONSOLE SIGN-IN FLOW ---
+        // Path corrected to /api/auth/token/
+        const loginResponse = await fetch(`${baseUrl}/api/auth/token/`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: formData.email, 
+            password: formData.password,
+          }),
+        });
+
+        if (!loginResponse.ok) {
+          throw new Error("Invalid node configuration credentials. Handshake rejected.");
+        }
+
+        const authData = await loginResponse.json();
+        login(authData.access || authData.token);
+      }
+    } catch (err: any) {
+      setError(err.message || "An error occurred within the authentication orchestration layer.");
+    } finally {
       setIsLoading(false);
-      router.push("/dashboard");
-    }, 1200);
+    }
   };
 
   return (
@@ -66,6 +146,16 @@ export default function OnboardingGateway() {
                 : "Re-engage system telemetry pipelines and shift scheduler maps."}
             </p>
           </div>
+
+          {/* Dynamic Error Feedback Alert */}
+          {error && (
+            <div className="flex items-start gap-3 p-3 rounded-xl border border-red-200 bg-red-50 text-red-800 text-xs font-mono leading-relaxed">
+              <AlertCircle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">Pipeline Error:</span> {error}
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Core Credentials Section */}
@@ -96,26 +186,33 @@ export default function OnboardingGateway() {
               </div>
             </div>
 
-            {/* Staggered Contextual Form: Only prompt for Model Parameters if Signing Up/Creating an Account */}
+            {/* Staggered Contextual Form: Map parameters on account initialization */}
             {isSignUp && (
               <div className="space-y-6 pt-6 border-t border-slate-100 animate-fade-in" style={{ animationDuration: "0.4s" }}>
                 
-                {/* Carbon Intensity Hook Group */}
+                {/* Carbon Intensity Hook Group Dropdown */}
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
                     <MapPin className="h-4 w-4 text-emerald-500" />
                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">National Grid ESO Target Zone</label>
                   </div>
-                  <input
+                  
+                  <select
                     required
-                    type="text"
                     name="postcode"
                     value={formData.postcode}
                     onChange={handleInputChange}
-                    className="w-full text-sm font-mono font-bold uppercase rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 outline-none transition-all focus:border-emerald-500 focus:bg-white tracking-wide"
-                  />
+                    className="w-full text-sm font-mono font-bold uppercase rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 outline-none transition-all focus:border-emerald-500 focus:bg-white tracking-wide cursor-pointer"
+                  >
+                    {AVAILABLE_POSTCODES.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                  
                   <p className="text-[11px] text-slate-400 mt-1 leading-normal">
-                    Used to synchronize live 24-hour regional carbon intensity telemetry vectors downstream.
+                    Synchronizes 24-hour regional carbon intensity telemetry vectors down to your localized grid node.
                   </p>
                 </div>
 
@@ -123,7 +220,7 @@ export default function OnboardingGateway() {
                 <div className="space-y-3">
                   <div className="flex items-center gap-1.5">
                     <Building2 className="h-4 w-4 text-emerald-500" />
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Structural Envelope Parameters z</label>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Structural Envelope Parameters</label>
                   </div>
                   
                   <div className="grid grid-cols-2 gap-3 text-xs">
@@ -132,19 +229,19 @@ export default function OnboardingGateway() {
                       <input type="number" step="0.01" name="relativeCompactness" value={formData.relativeCompactness} onChange={handleInputChange} className="w-full font-mono rounded-lg border border-slate-200 px-3 py-2 bg-slate-50/50 outline-none focus:border-emerald-500 focus:bg-white" />
                     </div>
                     <div>
-                      <span className="block text-slate-400 mb-1">Surface Area ($m^2$)</span>
+                      <span className="block text-slate-400 mb-1">Surface Area (m²)</span>
                       <input type="number" step="0.1" name="surfaceArea" value={formData.surfaceArea} onChange={handleInputChange} className="w-full font-mono rounded-lg border border-slate-200 px-3 py-2 bg-slate-50/50 outline-none focus:border-emerald-500 focus:bg-white" />
                     </div>
                     <div>
-                      <span className="block text-slate-400 mb-1">Wall Area ($m^2$)</span>
+                      <span className="block text-slate-400 mb-1">Wall Area (m²)</span>
                       <input type="number" step="0.1" name="wallArea" value={formData.wallArea} onChange={handleInputChange} className="w-full font-mono rounded-lg border border-slate-200 px-3 py-2 bg-slate-50/50 outline-none focus:border-emerald-500 focus:bg-white" />
                     </div>
                     <div>
-                      <span className="block text-slate-400 mb-1">Roof Area ($m^2$)</span>
+                      <span className="block text-slate-400 mb-1">Roof Area (m²)</span>
                       <input type="number" step="0.1" name="roofArea" value={formData.roofArea} onChange={handleInputChange} className="w-full font-mono rounded-lg border border-slate-200 px-3 py-2 bg-slate-50/50 outline-none focus:border-emerald-500 focus:bg-white" />
                     </div>
                     <div>
-                      <span className="block text-slate-400 mb-1">Overall Height ($m$)</span>
+                      <span className="block text-slate-400 mb-1">Overall Height (m)</span>
                       <input type="number" step="0.1" name="overallHeight" value={formData.overallHeight} onChange={handleInputChange} className="w-full font-mono rounded-lg border border-slate-200 px-3 py-2 bg-slate-50/50 outline-none focus:border-emerald-500 focus:bg-white" />
                     </div>
                     <div>
@@ -163,7 +260,7 @@ export default function OnboardingGateway() {
                   </div>
                   <p className="text-[11px] text-slate-400 leading-normal mt-1 flex gap-1 items-start">
                     <HelpCircle className="h-3 w-3 mt-0.5 text-slate-400 shrink-0" />
-                    These 8 continuous structural values feed natively into the local PyTorch baseline engine to compute localized thermal insulation and load metrics.
+                    These structural values feed directly into your back-end model execution bounds to calibrate baseline thermal calculations.
                   </p>
                 </div>
               </div>
@@ -176,7 +273,7 @@ export default function OnboardingGateway() {
               className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3.5 text-sm font-semibold text-white shadow hover:bg-slate-800 transition-all active:scale-[0.99] disabled:opacity-50 font-sans"
             >
               {isLoading ? (
-                <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
               ) : (
                 <>
                   {isSignUp ? "Synchronize and Compile Core Account" : "Initialize Workspace Environment"}
@@ -190,7 +287,10 @@ export default function OnboardingGateway() {
           <div className="text-center">
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+              }}
               className="text-xs font-semibold text-slate-500 hover:text-emerald-600 transition-colors duration-300"
             >
               {isSignUp ? "Already registered? Use an existing access profile" : "Need to onboard a new asset? Initialize structural telemetry parameters"}
@@ -198,7 +298,7 @@ export default function OnboardingGateway() {
           </div>
         </div>
 
-        {/* Footer legal placeholder */}
+        {/* Footer info placeholder */}
         <div className="text-center text-[11px] text-slate-400 font-normal">
           Protected Edge Execution Environment. Encryption Verified.
         </div>
@@ -206,7 +306,6 @@ export default function OnboardingGateway() {
 
       {/* Right Column: Premium High-Contrast Explainer Feature Panel */}
       <div className="hidden lg:flex flex-col justify-between p-16 bg-slate-900 text-white relative overflow-hidden group">
-        {/* Dynamic backdrop bloom element */}
         <div className="absolute -right-40 -top-40 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl transition-opacity duration-1000 group-hover:bg-emerald-400/20" />
         
         <div className="text-xs font-bold font-mono tracking-widest text-emerald-400 uppercase">
