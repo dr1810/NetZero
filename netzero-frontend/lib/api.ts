@@ -41,6 +41,39 @@ export interface AssetProfile {
   is_modulated_active: boolean;
   registered_at: string;
 }
+export interface NewAssetInput {
+  building: number;
+  name: string;
+  electrical_capacity_kw: number;
+  criticality_classification:
+    | "CRITICAL"
+    | "FLEXIBLE"
+    | "SHEDDABLE";
+}
+
+export const createAsset = async (
+  payload: NewAssetInput
+) => {
+  const res = await fetch(
+    `${DJANGO_BASE_URL}/assets/`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!res.ok) {
+    const errorData = await res.text();
+    throw new Error(
+      errorData || "Failed to register flexible asset."
+    );
+  }
+
+  return res.json();
+};
 
 export const fetchBuildings = async (): Promise<BuildingProfile[]> => {
   const res = await fetch(`${DJANGO_BASE_URL}/buildings/`, { cache: 'no-store' });

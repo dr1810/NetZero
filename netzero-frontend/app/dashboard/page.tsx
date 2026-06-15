@@ -22,6 +22,7 @@ import {
   Layers 
 } from "lucide-react";
 import NewBuildingModal from "@/components/NewBuildingModal";
+import NewAssetModal from "@/components/NewAssetModal";
 
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
@@ -29,7 +30,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
+  const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -116,13 +117,24 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Matrix Core Dashboard</h1>
           <p className="text-xs text-slate-500 mt-0.5">Thermodynamic asset twin inventory distribution profiles.</p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-1.5 self-start sm:self-auto rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 shadow-sm"
-        >
-          <Plus className="h-4 w-4" />
-          Configure Matrix Twin
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 shadow-sm"
+          >
+            <Plus className="h-4 w-4" />
+            Configure Matrix Twin
+          </button>
+
+          <button
+            onClick={() => setIsAssetModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-500 shadow-sm"
+          >
+            <Zap className="h-4 w-4" />
+            Register Asset
+          </button>
+
+        </div>
       </div>
 
       {/* Numerical Metrics Summary Matrix Grid */}
@@ -343,11 +355,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <NewBuildingModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        onSuccess={loadDashboardData} 
-      />
+      <>
+        <NewBuildingModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSuccess={loadDashboardData}
+        />
+
+        <NewAssetModal
+          isOpen={isAssetModalOpen}
+          onClose={() => setIsAssetModalOpen(false)}
+          onSuccess={loadDashboardData}
+          buildings={buildings}
+        />
+      </>
     </div>
   );
 }
