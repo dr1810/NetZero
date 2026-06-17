@@ -9,6 +9,11 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .models import BuildingProfile, FlexibleAsset
 from .serializers import BuildingProfileSerializer, FlexibleAssetSerializer
+from .models import OperationalSchedule
+from .serializers import OperationalScheduleSerializer
+import random
+from rest_framework.decorators import action
+
 
 # -------------------------------------------------------------------------
 # LOCAL PYTORCH THERMODYNAMIC INFERENCE ENGINE
@@ -48,9 +53,6 @@ def run_thermodynamic_inference(profile: BuildingProfile):
 def send_sustainability_report(email, report_text):
     api_key = os.environ.get("RESEND_API_KEY")
 
-    if not api_key:
-        return False
-
     response = requests.post(
         "https://api.resend.com/emails",
         headers={
@@ -66,10 +68,8 @@ def send_sustainability_report(email, report_text):
         timeout=10,
     )
 
-    print("RESEND STATUS:", response.status_code)
-    print("RESEND RESPONSE:", response.text)
-
-    return response.status_code in [200, 201]
+    # IMPORTANT FIX: accept 200 OR 202
+    return response.status_code in [200, 202]
 
 class BuildingProfileViewSet(viewsets.ModelViewSet):
     """
@@ -242,3 +242,46 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
     queryset = FlexibleAsset.objects.all()
     serializer_class = FlexibleAssetSerializer
 
+
+
+def generate_mock_schedule():
+    """
+    MVP carbon-aware schedule generator (placeholder for ML model B integration)
+    """
+    return {
+        "00:00-06:00": "LOW",
+        "06:00-10:00": "MEDIUM",
+        "10:00-16:00": "HIGH",
+        "16:00-20:00": "MEDIUM",
+        "20:00-24:00": "LOW"
+    }
+
+
+class OperationalScheduleViewSet(viewsets.ModelViewSet):
+    queryset = OperationalSchedule.objects.all()
+    serializer_class = OperationalScheduleSerializer
+
+    def create(self, request, *args, **kwargs):
+        building_id = request.data.get("building")
+
+        if not BuildingProfile.objects.filter(id=building_id).exists():
+            return Response(
+                {"error": "Invalid building"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        schedule = generate_mock_schedule()
+
+        obj = OperationalSchedule.objects.create(
+            building_id=building_id,
+            schedule_json=schedule,
+            recommendation_text=(
+                "Shift flexible loads to LOW carbon windows. "
+                "Avoid peak emissions periods (10:00–16:00)."
+            )
+        )
+
+        return Response(
+            OperationalScheduleSerializer(obj).data,
+            status=status.HTTP_201_CREATED
+        )
