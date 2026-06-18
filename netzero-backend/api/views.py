@@ -13,6 +13,9 @@ from .models import OperationalSchedule
 from .serializers import OperationalScheduleSerializer
 import random
 from rest_framework.decorators import action
+from django.db import models
+from django.core.validators import MinValueValidator
+
 
 
 # -------------------------------------------------------------------------
@@ -284,4 +287,43 @@ class OperationalScheduleViewSet(viewsets.ModelViewSet):
         return Response(
             OperationalScheduleSerializer(obj).data,
             status=status.HTTP_201_CREATED
+        )
+    
+class CarbonPreference(models.Model):
+    """
+    User-defined sustainability thresholds and carbon targets.
+    """
+
+    building = models.OneToOneField(
+        "BuildingProfile",
+        on_delete=models.CASCADE,
+        related_name="carbon_preference"
+    )
+
+    carbon_intensity_threshold = models.FloatField(
+        validators=[MinValueValidator(0)],
+        help_text="gCO2/kWh threshold triggering load modulation"
+    )
+
+    daily_carbon_budget_kg = models.FloatField(
+        validators=[MinValueValidator(0)],
+        help_text="Maximum daily carbon emissions target"
+    )
+
+    automation_enabled = models.BooleanField(
+        default=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    def __str__(self):
+        return (
+            f"{self.building.postcode} "
+            f"(Threshold: {self.carbon_intensity_threshold})"
         )
