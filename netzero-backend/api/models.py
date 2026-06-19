@@ -1,4 +1,6 @@
 from django.db import models
+from django.core.validators import MinValueValidator, MaxValueValidator
+
 
 class BuildingProfile(models.Model):
     """
@@ -56,3 +58,47 @@ class FlexibleAsset(models.Model):
 
     def __str__(self):
         return f"{self.name} [{self.criticality_classification}]"
+    
+class OperationalSchedule(models.Model):
+    building = models.ForeignKey(
+        BuildingProfile,
+        on_delete=models.CASCADE,
+        related_name="schedules"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    # 24-hour carbon-aware schedule (simple MVP representation)
+    schedule_json = models.JSONField()
+
+    recommendation_text = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Schedule for {self.building.user_email}"
+    
+
+class CarbonPreference(models.Model):
+    building = models.OneToOneField(
+        "BuildingProfile",
+        on_delete=models.CASCADE,
+        related_name="carbon_preference"
+    )
+
+    carbon_intensity_threshold = models.FloatField(
+        validators=[MinValueValidator(0), MaxValueValidator(1000)]
+    )
+
+    daily_carbon_budget_kg = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    automation_enabled = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return (
+            f"{self.building.postcode} "
+            f"(Threshold: {self.carbon_intensity_threshold})"
+        )

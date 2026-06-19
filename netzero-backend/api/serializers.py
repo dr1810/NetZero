@@ -1,6 +1,14 @@
 # api/serializers.py
 from rest_framework import serializers
 from .models import BuildingProfile, FlexibleAsset
+from .models import OperationalSchedule
+from rest_framework import serializers
+from .models import CarbonPreference
+
+class CarbonPreferenceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CarbonPreference
+        fields = "__all__"
 
 class BuildingProfileSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,3 +31,9 @@ class FlexibleAssetSerializer(serializers.ModelSerializer):
     class Meta:
         model = FlexibleAsset
         fields = '__all__'
+
+
+class OperationalScheduleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OperationalSchedule
+        fields = "__all__"
