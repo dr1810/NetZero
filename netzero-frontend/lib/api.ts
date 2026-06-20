@@ -134,3 +134,54 @@ export const emailReport = async (id: number) => {
 
   return res.json();
 };
+
+export interface CarbonPreference {
+  id?: number;
+  building: number;
+  carbon_intensity_threshold: number;
+  daily_carbon_budget_kg: number;
+  automation_enabled: boolean;
+}
+
+export async function createCarbonPreference(
+  payload: CarbonPreference
+) {
+  const response = await fetch(
+    `${DJANGO_BASE_URL}/carbon-preferences/`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to create preference");
+  }
+
+  return response.json();
+}
+
+export async function updateCarbonPreference(
+  id: number,
+  payload: CarbonPreference
+) {
+  const response = await fetch(
+    `${DJANGO_BASE_URL}/carbon-preferences/${id}/`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to update preference");
+  }
+
+  return response.json();
+}

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import NewBuildingModal from "@/components/NewBuildingModal";
 import NewAssetModal from "@/components/NewAssetModal";
-
+import NewCarbonPreferenceModal from "@/components/NewCarbonPreferenceModal";
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [assets, setAssets] = useState<AssetProfile[]>([]);
@@ -58,6 +58,11 @@ export default function DashboardPage() {
       alert("Error deleting building: " + err.message);
     }
   };
+
+  const [
+    isPreferenceModalOpen,
+    setIsPreferenceModalOpen
+  ] = useState(false);
 
   const handleEmailReport = async (id: number) => {
   try {
@@ -134,6 +139,15 @@ export default function DashboardPage() {
             Register Asset
           </button>
 
+          <button
+            onClick={() =>
+              setIsPreferenceModalOpen(true)
+            }
+            className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white"
+          >
+            Carbon Limits
+          </button>
+
         </div>
       </div>
 
@@ -173,6 +187,42 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      {/* Active Carbon Modulation Events */}
+      {activeModulationCount > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <ShieldCheck className="h-5 w-5 text-amber-600" />
+            <h2 className="font-semibold text-amber-900">
+              Active Carbon Modulation Events
+            </h2>
+          </div>
+
+          <div className="space-y-2">
+            {assets
+              .filter(asset => asset.is_modulated_active)
+              .map(asset => (
+                <div
+                  key={asset.id}
+                  className="flex items-center justify-between rounded-lg bg-white px-4 py-3 border border-amber-100"
+                >
+                  <div>
+                    <p className="font-medium text-slate-800">
+                      {asset.name}
+                    </p>
+
+                    <p className="text-xs text-slate-500">
+                      Capacity: {asset.electrical_capacity_kw} kW
+                    </p>
+                  </div>
+
+                  <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+                    MODULATED
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Visual Analytics Plots Section */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -365,6 +415,15 @@ export default function DashboardPage() {
         <NewAssetModal
           isOpen={isAssetModalOpen}
           onClose={() => setIsAssetModalOpen(false)}
+          onSuccess={loadDashboardData}
+          buildings={buildings}
+        />
+
+        <NewCarbonPreferenceModal
+          isOpen={isPreferenceModalOpen}
+          onClose={() =>
+            setIsPreferenceModalOpen(false)
+          }
           onSuccess={loadDashboardData}
           buildings={buildings}
         />
