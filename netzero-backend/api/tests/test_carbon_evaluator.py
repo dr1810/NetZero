@@ -36,24 +36,18 @@ class CarbonEvaluatorTests(TestCase):
 
     def test_threshold_exceeded(self):
 
-        result = (
-            CarbonThresholdEvaluator
-            .should_trigger_modulation(
-                self.preference,
-                300
-            )
+        result = CarbonThresholdEvaluator.should_trigger_modulation(
+            300,  # current intensity
+            self.preference.carbon_intensity_threshold  # threshold
         )
 
         self.assertTrue(result)
 
     def test_threshold_not_exceeded(self):
 
-        result = (
-            CarbonThresholdEvaluator
-            .should_trigger_modulation(
-                self.preference,
-                200
-            )
+        result = CarbonThresholdEvaluator.should_trigger_modulation(
+            200,
+            self.preference.carbon_intensity_threshold
         )
 
         self.assertFalse(result)

@@ -4,6 +4,13 @@ from api.models import CarbonPreference
 class CarbonThresholdEvaluator:
 
     @staticmethod
+    def should_trigger_modulation(
+        current_carbon_intensity: float,
+        threshold: float
+    ) -> bool:
+        return current_carbon_intensity > threshold
+
+    @staticmethod
     def evaluate_all(current_carbon_intensity: float):
 
         triggered_buildings = []
@@ -13,9 +20,8 @@ class CarbonThresholdEvaluator:
         )
 
         for pref in preferences:
-
-            if (
-                current_carbon_intensity >
+            if CarbonThresholdEvaluator.should_trigger_modulation(
+                current_carbon_intensity,
                 pref.carbon_intensity_threshold
             ):
                 triggered_buildings.append(pref.building)

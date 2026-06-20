@@ -30,15 +30,12 @@ class CarbonPreferenceAPITests(APITestCase):
         }
 
         response = self.client.post(
-            "/api/carbon-preferences/",
+            "/api/preferences/",
             payload,
             format="json"
         )
 
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST
-        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_reject_negative_budget(self):
         payload = {
@@ -49,15 +46,12 @@ class CarbonPreferenceAPITests(APITestCase):
         }
 
         response = self.client.post(
-            "/api/carbon-preferences/",
+            "/api/preferences/",
             payload,
             format="json"
         )
 
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST
-        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_accept_valid_values(self):
         payload = {
@@ -68,12 +62,9 @@ class CarbonPreferenceAPITests(APITestCase):
         }
 
         response = self.client.post(
-            "/api/carbon-preferences/",
+            "/api/preferences/",
             payload,
             format="json"
         )
 
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_201_CREATED
-        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
