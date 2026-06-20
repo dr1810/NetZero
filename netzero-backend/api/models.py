@@ -1,35 +1,55 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
-
-
 class BuildingProfile(models.Model):
     """
-    Foundational thermodynamic digital twin attributes 
+    Foundational thermodynamic digital twin attributes
     extracted from the UCI Energy Efficiency dataset layout.
     """
+
     user_email = models.EmailField(unique=True)
     postcode = models.CharField(max_length=8)
     grid_zone_id = models.CharField(max_length=15, blank=True, null=True)
-    
+
     # Structural Input Vector Parameters (UCI Feature Maps)
-    relative_compactness = models.FloatField()
-    surface_area = models.FloatField()
-    wall_area = models.FloatField()
-    roof_area = models.FloatField()
-    overall_height = models.FloatField()
-    orientation = models.IntegerField()  # 2: North, 3: East, 4: South, 5: West
-    glazing_area = models.FloatField()
+    relative_compactness = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    surface_area = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    wall_area = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    roof_area = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    overall_height = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
+    orientation = models.IntegerField()
+
+    glazing_area = models.FloatField(
+        validators=[MinValueValidator(0)]
+    )
+
     glazing_area_distribution = models.IntegerField()
-    
-    # Extracted Model Insights Derived via PyTorch Local Calculations
-    calculated_base_load_kw = models.FloatField(blank=True, null=True)
-    thermal_inertia_coefficient = models.FloatField(blank=True, null=True)
-    
+
+    calculated_base_load_kw = models.FloatField(
+        blank=True,
+        null=True
+    )
+
+    thermal_inertia_coefficient = models.FloatField(
+        blank=True,
+        null=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return f"Profile: {self.user_email} ({self.postcode})"
-
 
 class FlexibleAsset(models.Model):
     """
