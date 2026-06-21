@@ -6,10 +6,40 @@ from rest_framework import serializers
 from .models import CarbonPreference
 
 class CarbonPreferenceSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = CarbonPreference
-        fields = "__all__"
+        fields = [
+            "id",
+            "building",
+            "carbon_intensity_threshold",
+            "daily_carbon_budget_kg",
+            "automation_enabled"
+        ]
 
+    def validate_carbon_intensity_threshold(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Carbon intensity threshold cannot be negative."
+            )
+        return value
+
+    def validate_daily_carbon_budget_kg(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                "Daily carbon budget cannot be negative."
+            )
+        return value
+
+    # Optional: object-level validation (future-proof)
+    def validate(self, data):
+        if (
+            data.get("carbon_intensity_threshold", 0) < 0 or
+            data.get("daily_carbon_budget_kg", 0) < 0
+        ):
+            raise serializers.ValidationError("Invalid carbon constraints.")
+        return data
+    
 class BuildingProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = BuildingProfile
