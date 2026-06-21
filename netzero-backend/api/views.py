@@ -318,13 +318,20 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
                 "simulated_heating_load": simulated_heating,
                 "simulated_cooling_load": simulated_cooling,
 
-                "heating_difference":
-                    simulated_heating - baseline_heating,
+                "heating_difference": simulated_heating - baseline_heating,
+                "cooling_difference": simulated_cooling - baseline_cooling,
 
-                "cooling_difference":
-                    simulated_cooling - baseline_cooling,
+                # REQUIRED FIELDS FOR TESTS
+                "surface_area": simulation_data["surface_area"],
+                "wall_area": simulation_data["wall_area"],
+                "roof_area": simulation_data["roof_area"],
+                "overall_height": simulation_data["overall_height"],
+                "relative_compactness": simulation_data["relative_compactness"],
+                "orientation": simulation_data["orientation"],
+                "glazing_area": simulation_data["glazing_area"],
+                "glazing_area_distribution": simulation_data["glazing_area_distribution"],
             },
-        status=status.HTTP_200_OK
+            status=status.HTTP_200_OK
         )
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):
