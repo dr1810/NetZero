@@ -1,25 +1,30 @@
 # api/views.py
 
 import os
-import requests
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework import viewsets, status
-from rest_framework.response import Response
-from .models import BuildingProfile, FlexibleAsset
-from .serializers import BuildingProfileSerializer, FlexibleAssetSerializer
-from .models import OperationalSchedule
-from .serializers import OperationalScheduleSerializer
 import random
-from rest_framework.decorators import action
+import requests
+
 from django.db import models
 from django.core.validators import MinValueValidator
 
-from rest_framework import viewsets
-from .models import CarbonPreference
-from .serializers import CarbonPreferenceSerializer
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
+from .models import (
+    BuildingProfile,
+    FlexibleAsset,
+    OperationalSchedule,
+    CarbonPreference,
+)
+
+from .serializers import (
+    BuildingProfileSerializer,
+    FlexibleAssetSerializer,
+    OperationalScheduleSerializer,
+    CarbonPreferenceSerializer,
+    RetrofitSimulationSerializer,
+)
 class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
     serializer_class = CarbonPreferenceSerializer
@@ -242,6 +247,49 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
         return Response(
             {"status": "EMAIL_FAILED"},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    @action(
+        detail=True,
+        methods=["post"]
+    )
+    def simulate(self, request, pk=None):
+
+        building = self.get_object()
+
+        serializer = RetrofitSimulationSerializer(
+            data=request.data
+        )
+
+        serializer.is_valid(
+            raise_exception=True
+        )
+
+        simulation_data = {
+            "relative_compactness":
+                building.relative_compactness,
+            "surface_area":
+                building.surface_area,
+            "wall_area":
+                building.wall_area,
+            "roof_area":
+                building.roof_area,
+            "overall_height":
+                building.overall_height,
+            "orientation":
+                building.orientation,
+            "glazing_area":
+                building.glazing_area,
+            "glazing_area_distribution":
+                building.glazing_area_distribution,
+        }
+
+        simulation_data.update(
+            serializer.validated_data
+        )
+
+        return Response(
+            simulation_data,
+            status=status.HTTP_200_OK
         )
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):

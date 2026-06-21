@@ -67,3 +67,13 @@ class OperationalScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = OperationalSchedule
         fields = "__all__"
+
+class RetrofitSimulationSerializer(serializers.Serializer):
+    relative_compactness = serializers.FloatField(required=False)
+    surface_area = serializers.FloatField(required=False)
+    wall_area = serializers.FloatField(required=False)
+    roof_area = serializers.FloatField(required=False)
+    overall_height = serializers.FloatField(required=False)
+    orientation = serializers.IntegerField(required=False)
+    glazing_area = serializers.FloatField(required=False)
+    glazing_area_distribution = serializers.IntegerField(required=False)
