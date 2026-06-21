@@ -50,6 +50,8 @@ class BuildingProfile(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
+    predicted_heating_load = models.FloatField(null=True, blank=True, default=0.0)
+    predicted_cooling_load = models.FloatField(null=True, blank=True, default=0.0)
 
 class FlexibleAsset(models.Model):
     """

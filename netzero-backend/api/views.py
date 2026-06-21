@@ -6,6 +6,7 @@ import requests
 
 from django.db import models
 from django.core.validators import MinValueValidator
+from ml.predictor import predict_loads
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -33,14 +34,13 @@ class CarbonPreferenceViewSet(viewsets.ModelViewSet):
 # LOCAL PYTORCH THERMODYNAMIC INFERENCE ENGINE
 # -------------------------------------------------------------------------
 def run_thermodynamic_inference(profile: BuildingProfile):
-    import torch
     """
-    Feeds the 8 raw architectural dataset features into a local PyTorch tensor matrix
-    to estimate structural baselines and thermal insulation properties.
+    Uses the trained PyTorch model to predict
+    heating and cooling loads from building features.
     """
+
     try:
-        # Create a 1x8 structural input feature matrix row tensor
-        input_vector = torch.tensor([[
+        features = [
             profile.relative_compactness,
             profile.surface_area,
             profile.wall_area,
@@ -48,18 +48,20 @@ def run_thermodynamic_inference(profile: BuildingProfile):
             profile.overall_height,
             float(profile.orientation),
             profile.glazing_area,
-            float(profile.glazing_area_distribution)
-        ]], dtype=torch.float32)
-        
-        # Matrix weight inference approximation matching local tracking baselines
-        predicted_base_load = float(torch.mean(input_vector).item() * 1.38)
-        calculated_inertia = float((profile.wall_area / profile.surface_area) * (profile.overall_height / 3.2))
-        
-        return round(predicted_base_load, 2), round(calculated_inertia, 3)
-    except Exception:
-        # Graceful fallback parameters if execution context encounters anomalies
-        return round(profile.surface_area * 0.042, 2), 0.450
+            float(profile.glazing_area_distribution),
+        ]
 
+        predictions = predict_loads(features)
+
+        heating_load = predictions["heating_load"]
+        cooling_load = predictions["cooling_load"]
+
+        return round(heating_load, 2), round(cooling_load, 2)
+
+    except Exception as e:
+        print("ML inference error:", e)
+
+        return 0.0, 0.0
 
 # -------------------------------------------------------------------------
 # REST VIEWSETS INTERFACES
@@ -140,9 +142,12 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             profile_instance.grid_zone_id = "TIMEOUT_FALLBACK"
 
         # --- Epic 3 Workflow: Run Local PyTorch Multi-Layer Inference Engine ---
-        base_load, thermal_inertia = run_thermodynamic_inference(profile_instance)
-        profile_instance.calculated_base_load_kw = base_load
-        profile_instance.thermal_inertia_coefficient = thermal_inertia
+        heating_load, cooling_load = run_thermodynamic_inference(
+            profile_instance
+        )
+
+        profile_instance.predicted_heating_load = heating_load
+        profile_instance.predicted_cooling_load = cooling_load
         
         # Commit completely compiled analytics data entity rows to storage layer
         profile_instance.save()
@@ -151,8 +156,8 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             {
                 "status": "DIGITAL_TWIN_INITIALIZED",
                 "building_profile_id": profile_instance.id,
-                "calculated_base_load_kw": base_load,
-                "thermal_inertia_coefficient": thermal_inertia,
+                "predicted_heating_load": heating_load,
+                "predicted_cooling_load": cooling_load,
                 "mapped_grid_zone": profile_instance.grid_zone_id
             },
             status=status.HTTP_201_CREATED
@@ -178,14 +183,14 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
     {building.grid_zone_id}
 
     ========================================
-    THERMODYNAMIC ANALYSIS
+    THERMAL LOAD PREDICTIONS
     ========================================
 
-    Calculated Base Load:
-    {building.calculated_base_load_kw:.2f} kW
+    Predicted Heating Load:
+    {(building.predicted_heating_load or 0):.2f} kWh
 
-    Thermal Inertia Coefficient:
-    {building.thermal_inertia_coefficient:.3f}
+    Predicted Cooling Load:
+    {(building.predicted_cooling_load or 0):.2f} kWh
 
     ========================================
     STRUCTURAL PROFILE
@@ -287,9 +292,39 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             serializer.validated_data
         )
 
+        features = [
+            simulation_data["relative_compactness"],
+            simulation_data["surface_area"],
+            simulation_data["wall_area"],
+            simulation_data["roof_area"],
+            simulation_data["overall_height"],
+            float(simulation_data["orientation"]),
+            simulation_data["glazing_area"],
+            float(simulation_data["glazing_area_distribution"]),
+        ]
+
+        predictions = predict_loads(features)
+
+        simulated_heating = predictions["heating_load"]
+        simulated_cooling = predictions["cooling_load"]
+
+        baseline_heating = building.predicted_heating_load
+        baseline_cooling = building.predicted_cooling_load
         return Response(
-            simulation_data,
-            status=status.HTTP_200_OK
+            {
+                "baseline_heating_load": baseline_heating,
+                "baseline_cooling_load": baseline_cooling,
+
+                "simulated_heating_load": simulated_heating,
+                "simulated_cooling_load": simulated_cooling,
+
+                "heating_difference":
+                    simulated_heating - baseline_heating,
+
+                "cooling_difference":
+                    simulated_cooling - baseline_cooling,
+            },
+        status=status.HTTP_200_OK
         )
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):

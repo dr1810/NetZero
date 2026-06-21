@@ -15,7 +15,7 @@ SECRET_KEY = os.environ.get(
 
 # Local development: True
 # Production: set DEBUG=False in Render environment variables
-DEBUG = os.environ.get("DEBUG", "False") == "True"
+DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 
 ALLOWED_HOSTS = [
     ".onrender.com",
