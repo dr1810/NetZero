@@ -1,11 +1,19 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
+from django.contrib.auth.models import User
+
 class BuildingProfile(models.Model):
     """
     Foundational thermodynamic digital twin attributes
     extracted from the UCI Energy Efficiency dataset layout.
     """
-
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="buildings",
+        null=True,
+        blank=True
+    )
     user_email = models.EmailField(unique=True)
     postcode = models.CharField(max_length=8)
     grid_zone_id = models.CharField(max_length=15, blank=True, null=True)

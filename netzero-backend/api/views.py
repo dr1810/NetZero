@@ -3,10 +3,12 @@
 import os
 import random
 import requests
+from rest_framework.decorators import action
 
 from django.db import models
 from django.core.validators import MinValueValidator
 from ml.predictor import predict_loads
+from rest_framework.permissions import IsAuthenticated
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -94,13 +96,19 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
     """
     queryset = BuildingProfile.objects.all()
     serializer_class = BuildingProfileSerializer
-
+    permission_classes = [IsAuthenticated]
+    def get_queryset(self):
+        return BuildingProfile.objects.filter(
+            owner=self.request.user
+        )
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         
         # Instantiate in-memory database record state
-        profile_instance = serializer.save()
+        profile_instance = serializer.save(
+            owner=request.user
+        )
         
         # --- Epic 2 Workflow: Clean and Parse UK Postcode Structure ---
         raw_pc = profile_instance.postcode.strip().upper()
@@ -162,6 +170,7 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED
         )
+    
     @action(detail=True, methods=["post"])
     def email_report(self, request, pk=None):
         building = self.get_object()
@@ -333,6 +342,37 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK
         )
+    @action(detail=False, methods=["get"])
+    def portfolio(self, request):
+
+        buildings = BuildingProfile.objects.filter(
+            owner=request.user
+        )
+
+        total_buildings = buildings.count()
+
+        total_heating = sum(
+            b.predicted_heating_load or 0
+            for b in buildings
+        )
+
+        total_cooling = sum(
+            b.predicted_cooling_load or 0
+            for b in buildings
+        )
+
+        estimated_carbon_avoided = total_heating * 0.2
+        estimated_cost_savings = total_heating * 0.15
+
+        return Response({
+            "total_facilities": total_buildings,
+            "total_heating_load": total_heating,
+            "total_cooling_load": total_cooling,
+            "estimated_carbon_avoided_kg":
+                estimated_carbon_avoided,
+            "estimated_cost_savings_gbp":
+                estimated_cost_savings
+        })
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):
     """
