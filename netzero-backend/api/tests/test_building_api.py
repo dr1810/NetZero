@@ -1,8 +1,16 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
-
+from django.contrib.auth.models import User
+from api.models import BuildingProfile
 
 class BuildingProfileAPITest(APITestCase):
+
+    def setUp(self):
+        # 1. Create a user
+        self.user = User.objects.create_user(username="testuser", password="password")
+        
+        # 2. Force the client to be authenticated as this user
+        self.client.force_authenticate(user=self.user)
 
     def test_create_building(self):
         payload = {
@@ -30,6 +38,8 @@ class BuildingProfileAPITest(APITestCase):
         )
 
     def test_get_buildings(self):
+        # Now that you are authenticated, this will not trigger the 
+        # AnonymousUser errors in your get_queryset()
         response = self.client.get("/api/buildings/")
 
         self.assertEqual(

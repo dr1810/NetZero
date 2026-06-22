@@ -1,7 +1,7 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-
+from django.contrib.auth.models import User
 
 from api.models import (
     BuildingProfile,
@@ -12,6 +12,11 @@ from api.models import (
 class CarbonPreferenceTests(APITestCase):
 
     def setUp(self):
+        # Create user and authenticate
+        self.user = User.objects.create_user(username="testuser", password="password")
+        self.client.force_authenticate(user=self.user)
+
+        # Corrected: Use keyword arguments, not dictionary syntax
         self.building = BuildingProfile.objects.create(
             user_email="test@example.com",
             postcode="EC1A1BB",
@@ -23,13 +28,10 @@ class CarbonPreferenceTests(APITestCase):
             orientation=2,
             glazing_area=0.25,
             glazing_area_distribution=1,
-            grid_zone_id="13",
-            calculated_base_load_kw=60,
-            thermal_inertia_coefficient=0.85
+            owner=self.user  # Ensure your model has this field
         )
 
         self.url = "/api/preferences/"
-
     def test_create_valid_preference(self):
         payload = {
             "building": self.building.id,
@@ -117,6 +119,12 @@ from api.models import BuildingProfile
 class BuildingProfileTests(APITestCase):
 
     def setUp(self):
+        # 1. Create a test user
+        self.user = User.objects.create_user(username="testuser", password="password")
+        
+        # 2. Force the client to be authenticated as this user
+        self.client.force_authenticate(user=self.user)
+        
         self.url = "/api/buildings/"
 
         self.valid_payload = {

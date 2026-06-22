@@ -96,7 +96,7 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
     """
     queryset = BuildingProfile.objects.all()
     serializer_class = BuildingProfileSerializer
-    permission_classes = [IsAuthenticated]
+    
     def get_queryset(self):
         return BuildingProfile.objects.filter(
             owner=self.request.user

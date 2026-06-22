@@ -1,13 +1,18 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
-
+from django.contrib.auth.models import User
 from api.models import BuildingProfile
-
 
 class RetrofitSimulationTests(APITestCase):
 
     def setUp(self):
-
+        # 1. Create a user to own the building
+        self.user = User.objects.create_user(username="testuser", password="password")
+        
+        # 2. Authenticate the client
+        self.client.force_authenticate(user=self.user)
+        
+        # 3. Create the building associated with the user
         self.building = BuildingProfile.objects.create(
             user_email="retrofit@test.com",
             postcode="AB12CD",
@@ -18,8 +23,11 @@ class RetrofitSimulationTests(APITestCase):
             overall_height=7,
             orientation=2,
             glazing_area=0.20,
-            glazing_area_distribution=1
+            glazing_area_distribution=1,
+            owner=self.user  # Ensure your model has an 'owner' field
         )
+
+    # ... all your existing test methods will now function correctly ...
 
     def test_simulation_endpoint_returns_success(self):
 
