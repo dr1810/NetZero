@@ -1,3 +1,36 @@
 from django.contrib import admin
+from .models import (
+	BuildingProfile,
+	FlexibleAsset,
+	OperationalSchedule,
+	CarbonPreference,
+	NotificationEvent,
+)
 
-# Register your models here.
+
+@admin.register(BuildingProfile)
+class BuildingProfileAdmin(admin.ModelAdmin):
+	list_display = ("id", "postcode", "user_email", "grid_zone_id", "created_at")
+	search_fields = ("postcode", "user_email")
+
+
+@admin.register(FlexibleAsset)
+class FlexibleAssetAdmin(admin.ModelAdmin):
+	list_display = ("id", "name", "building", "electrical_capacity_kw", "criticality_classification")
+
+
+@admin.register(OperationalSchedule)
+class OperationalScheduleAdmin(admin.ModelAdmin):
+	list_display = ("id", "building", "created_at")
+
+
+@admin.register(CarbonPreference)
+class CarbonPreferenceAdmin(admin.ModelAdmin):
+	list_display = ("id", "building", "carbon_intensity_threshold", "daily_carbon_budget_kg", "automation_enabled")
+
+
+@admin.register(NotificationEvent)
+class NotificationEventAdmin(admin.ModelAdmin):
+	list_display = ("id", "building", "event_type", "triggered_at", "delivered")
+	list_filter = ("event_type", "delivered")
+	search_fields = ("building__postcode", "recipient", "message")

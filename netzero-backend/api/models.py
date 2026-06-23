@@ -14,7 +14,8 @@ class BuildingProfile(models.Model):
         null=True,
         blank=True
     )
-    user_email = models.EmailField(unique=True)
+    # Allow multiple BuildingProfile rows per user (owner); remove unique constraint
+    user_email = models.EmailField()
     postcode = models.CharField(max_length=8)
     grid_zone_id = models.CharField(max_length=15, blank=True, null=True)
 
@@ -60,6 +61,11 @@ class BuildingProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     predicted_heating_load = models.FloatField(null=True, blank=True, default=0.0)
     predicted_cooling_load = models.FloatField(null=True, blank=True, default=0.0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "postcode"], name="unique_owner_postcode")
+        ]
 
 class FlexibleAsset(models.Model):
     """
@@ -132,3 +138,37 @@ class CarbonPreference(models.Model):
             f"{self.building.postcode} "
             f"(Threshold: {self.carbon_intensity_threshold})"
         )
+
+
+class NotificationEvent(models.Model):
+    """
+    Records notification attempts and outcomes for audit and troubleshooting.
+    """
+    EVENT_TYPES = [
+        ("CARBON_SPIKE", "Carbon Intensity Spike"),
+        ("SCHEDULE_READY", "Schedule Ready"),
+    ]
+
+    building = models.ForeignKey(
+        BuildingProfile,
+        on_delete=models.CASCADE,
+        related_name="notification_events",
+    )
+    event_type = models.CharField(max_length=32, choices=EVENT_TYPES)
+    triggered_at = models.DateTimeField(auto_now_add=True)
+
+    # Forecast window (inclusive)
+    forecast_window_start = models.DateTimeField(null=True, blank=True)
+    forecast_window_end = models.DateTimeField(null=True, blank=True)
+
+    threshold_value = models.FloatField(null=True, blank=True)
+    forecast_peak_value = models.FloatField(null=True, blank=True)
+
+    message = models.TextField(blank=True, null=True)
+    recipient = models.EmailField(blank=True, null=True)
+
+    delivered = models.BooleanField(default=False)
+    delivery_reason = models.TextField(blank=True, null=True)
+
+    def __str__(self):
+        return f"Notification {self.event_type} for {self.building.postcode} at {self.triggered_at.isoformat()}"

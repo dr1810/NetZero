@@ -36,7 +36,7 @@ class PortfolioTests(APITestCase):
         BuildingProfile.objects.create(
             owner=self.user,
             user_email="b@test.com",
-            postcode="E16AN",
+            postcode="E17AN",
             relative_compactness=0.8,
             surface_area=100,
             wall_area=50,

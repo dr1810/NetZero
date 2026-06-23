@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import BuildingProfile, FlexibleAsset
 from .models import OperationalSchedule
 from rest_framework import serializers
-from .models import CarbonPreference
+from .models import CarbonPreference, NotificationEvent
 
 class CarbonPreferenceSerializer(serializers.ModelSerializer):
 
@@ -54,6 +54,39 @@ class BuildingProfileSerializer(serializers.ModelSerializer):
         if len(clean_pc) < 5 or len(clean_pc) > 8:
             raise serializers.ValidationError("Postcode format must adhere to standard UK grid constraints.")
         return clean_pc
+    def to_internal_value(self, data):
+        # Coerce common numeric fields when frontend sends them as strings
+        coerced = dict(data)
+        float_fields = [
+            'relative_compactness',
+            'surface_area',
+            'wall_area',
+            'roof_area',
+            'overall_height',
+            'glazing_area',
+        ]
+        int_fields = [
+            'orientation',
+            'glazing_area_distribution',
+        ]
+
+        for f in float_fields:
+            if f in coerced and isinstance(coerced[f], str):
+                val = coerced[f].strip()
+                try:
+                    coerced[f] = float(val) if val != '' else None
+                except Exception:
+                    raise serializers.ValidationError({f: ['A valid number is required.']})
+
+        for f in int_fields:
+            if f in coerced and isinstance(coerced[f], str):
+                val = coerced[f].strip()
+                try:
+                    coerced[f] = int(val) if val != '' else None
+                except Exception:
+                    raise serializers.ValidationError({f: ['A valid integer is required.']})
+
+        return super().to_internal_value(coerced)
 
 
 class FlexibleAssetSerializer(serializers.ModelSerializer):
@@ -65,6 +98,12 @@ class FlexibleAssetSerializer(serializers.ModelSerializer):
 class OperationalScheduleSerializer(serializers.ModelSerializer):
     class Meta:
         model = OperationalSchedule
+        fields = "__all__"
+
+
+class NotificationEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NotificationEvent
         fields = "__all__"
 
 class RetrofitSimulationSerializer(serializers.Serializer):
