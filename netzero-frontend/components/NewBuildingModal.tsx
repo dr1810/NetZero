@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { createBuildingProfile, NewBuildingInput } from "@/lib/api";
+import { useRouter } from "next/navigation";
+import { createBuildingProfile, updateBuilding, NewBuildingInput, BuildingProfile } from "@/lib/api";
 import { Cpu, Loader2, CheckCircle2, AlertTriangle, X } from "lucide-react";
 
 const AVAILABLE_POSTCODES = [
@@ -27,11 +28,11 @@ interface FormProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialData?: BuildingProfile | null;
 }
 
-export default function NewBuildingModal({ isOpen, onClose, onSuccess }: FormProps) {
+export default function NewBuildingModal({ isOpen, onClose, onSuccess, initialData = null }: FormProps) {
   const [formData, setFormData] = useState<NewBuildingInput>({
-    user_email: "",
     postcode: AVAILABLE_POSTCODES[0].code,
     relative_compactness: 0.7,
     surface_area: 150,
@@ -43,9 +44,45 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess }: FormPro
     glazing_area_distribution: 1,
   });
 
+  // When editing, populate form with incoming data
+  React.useEffect(() => {
+    if (initialData && isOpen) {
+      setFormData({
+        postcode: initialData.postcode || AVAILABLE_POSTCODES[0].code,
+        relative_compactness: initialData.relative_compactness || 0.7,
+        surface_area: initialData.surface_area || 150,
+        wall_area: initialData.wall_area || 120,
+        roof_area: initialData.roof_area || 80,
+        overall_height: initialData.overall_height || 3.5,
+        orientation: initialData.orientation || 2,
+        glazing_area: initialData.glazing_area || 0.25,
+        glazing_area_distribution: initialData.glazing_area_distribution || 1,
+      });
+    }
+    if (!isOpen) {
+      // reset internal state when closed
+      setFormData({
+        postcode: AVAILABLE_POSTCODES[0].code,
+        relative_compactness: 0.7,
+        surface_area: 150,
+        wall_area: 120,
+        roof_area: 80,
+        overall_height: 3.5,
+        orientation: 2,
+        glazing_area: 0.25,
+        glazing_area_distribution: 1,
+      });
+      setExistingId(null);
+      setError(null);
+      setInferenceResult(null);
+    }
+  }, [initialData, isOpen]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inferenceResult, setInferenceResult] = useState<any | null>(null);
+  const [existingId, setExistingId] = useState<number | null>(null);
+  const router = useRouter();
 
   if (!isOpen) return null;
 
@@ -65,11 +102,28 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess }: FormPro
     setInferenceResult(null);
 
     try {
-      const result = await createBuildingProfile(formData);
+      let result;
+      if (initialData && initialData.id) {
+        result = await updateBuilding(initialData.id, formData);
+      } else {
+        result = await createBuildingProfile(formData);
+      }
       setInferenceResult(result);
       onSuccess();
+      onClose();
     } catch (err: any) {
-      setError(err.message || "Engine validation failed.");
+      // Try to parse structured backend message containing building_profile_id
+      let msg = err.message || "Engine validation failed.";
+      try {
+        const parsed = JSON.parse(msg);
+          if (parsed && parsed.building_profile_id) {
+          setExistingId(parsed.building_profile_id);
+          msg = parsed.detail || parsed.errors || msg;
+        }
+      } catch (e) {
+        // not JSON, ignore
+      }
+      setError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     } finally {
       setLoading(false);
     }
@@ -89,10 +143,6 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess }: FormPro
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Operator Email</label>
-              <input type="email" name="user_email" required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs" value={formData.user_email} onChange={handleInputChange} />
-            </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">UK Postcode</label>
               <select name="postcode" required className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs bg-white" value={formData.postcode} onChange={handleInputChange}>
@@ -118,6 +168,36 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess }: FormPro
             {loading ? "Processing..." : "Compile & Instantiate Twin"}
           </button>
         </form>
+
+        {/* Error dialog */}
+        {error && (
+          <div className="mt-6 p-4 rounded-xl border border-red-200 bg-red-50/60">
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-500" />
+                  <p className="text-sm font-semibold text-red-700">Action Required</p>
+                </div>
+                <p className="mt-2 text-xs text-red-700">{error}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {existingId && (
+                  <button
+                    onClick={() => {
+                      // navigate to existing building profile page
+                      router.push(`/dashboard/buildings/${existingId}`);
+                      onClose();
+                    }}
+                    className="rounded-md bg-slate-800 px-3 py-1 text-xs font-semibold text-white"
+                  >
+                    View Profile
+                  </button>
+                )}
+                <button onClick={() => { setError(null); setExistingId(null); }} className="ml-2 rounded-md bg-red-600 px-3 py-1 text-xs font-semibold text-white">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Inference Results display */}
         {inferenceResult && (

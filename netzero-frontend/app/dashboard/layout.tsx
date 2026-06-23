@@ -5,6 +5,9 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, BarChart3, Settings, Leaf, Building2 } from "lucide-react";
+import { User, LogOut } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 // Navigation menu links mapping directly to our active folder paths
 const navigationItems = [
@@ -20,6 +23,42 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+
+  function AuthControls() {
+    const { isAuthenticated, logout, userEmail } = useAuth();
+    const router = useRouter();
+
+    function initials(email?: string | null) {
+      if (!email) return 'ME';
+      const name = email.split('@')[0];
+      const parts = name.split(/[._\-]/).filter(Boolean);
+      if (parts.length === 0) return name.substring(0,2).toUpperCase();
+      if (parts.length === 1) return parts[0].substring(0,2).toUpperCase();
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+
+    if (!isAuthenticated) {
+      return (
+        <Link href="/login" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-emerald-600">
+          <User className="h-4 w-4 text-slate-400" />
+          <span className="text-xs font-semibold">Sign In</span>
+        </Link>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-3">
+        <button onClick={() => router.push('/dashboard/settings')} className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs bg-slate-50 border border-slate-200 text-slate-700">
+          <div className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-emerald-600 text-white text-[11px] font-semibold">{initials(userEmail)}</div>
+          <span>Profile</span>
+        </button>
+        <button onClick={() => logout()} className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs bg-red-50 border border-red-200 text-red-700">
+          <LogOut className="h-4 w-4" />
+          <span>Logout</span>
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen w-full bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50">
@@ -61,9 +100,12 @@ export default function DashboardLayout({
           <div className="text-xs font-semibold text-slate-400 tracking-wider uppercase">
             Workspace Hub / Digital Twin Simulation Environment
           </div>
-          <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-xs font-medium text-slate-400 font-mono">Local-Edge Active</span>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs font-medium text-slate-400 font-mono">Local-Edge Active</span>
+            </div>
+            <AuthControls />
           </div>
         </header>
 

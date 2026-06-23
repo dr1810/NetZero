@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile } from "@/lib/api";
+import { fetchBuildings, fetchAssets, BuildingProfile, AssetProfile, downloadESGReport } from "@/lib/api";
 import { Building2, Zap, ShieldCheck, AlertCircle, Loader2, ArrowUpRight, Plus } from "lucide-react";
 import NewBuildingModal from "@/components/NewBuildingModal";
 export default function DashboardOverview() {
@@ -124,6 +124,7 @@ export default function DashboardOverview() {
                     <th className="pb-2">Postcode</th>
                     <th className="pb-2">Surface Area</th>
                     <th className="pb-2">Base Load</th>
+                    <th className="pb-2">Report</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 text-slate-600">
@@ -132,7 +133,14 @@ export default function DashboardOverview() {
                       <td className="py-2.5 font-semibold text-slate-800">{b.postcode}</td>
                       <td className="py-2.5">{b.surface_area} m²</td>
                       <td className="py-2.5 font-mono text-slate-500">{b.calculated_base_load_kw} kW</td>
+                      <td className="py-2.5">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => downloadESGReport(b.id)} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-white text-[11px] font-medium hover:bg-emerald-700">ESG Report</button>
+                          <a href={`/dashboard/buildings/${b.id}`} className="rounded-lg border border-slate-200 px-3 py-1.5 text-[11px] font-medium text-slate-700 hover:bg-slate-50">Open</a>
+                        </div>
+                    </td>
                     </tr>
+                    
                   ))}
                 </tbody>
               </table>

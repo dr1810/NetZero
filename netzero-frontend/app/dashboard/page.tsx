@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import {
   fetchBuildings,
   fetchAssets,
+  fetchBuildingSchedule,
   deleteBuilding,
   emailReport,
   BuildingProfile,
@@ -24,6 +25,7 @@ import {
 import NewBuildingModal from "@/components/NewBuildingModal";
 import NewAssetModal from "@/components/NewAssetModal";
 import NewCarbonPreferenceModal from "@/components/NewCarbonPreferenceModal";
+import { useRouter } from "next/navigation";
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [assets, setAssets] = useState<AssetProfile[]>([]);
@@ -31,6 +33,9 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
+  const [editingBuilding, setEditingBuilding] = useState<BuildingProfile | null>(null);
+
+  const router = useRouter();
   const loadDashboardData = async () => {
     try {
       setLoading(true);
@@ -124,11 +129,11 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => { setEditingBuilding(null); setIsModalOpen(true); }}
             className="flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 shadow-sm"
           >
             <Plus className="h-4 w-4" />
-            Configure Matrix Twin
+            Add Building
           </button>
 
           <button
@@ -337,11 +342,37 @@ export default function DashboardPage() {
                         <div className="flex justify-end gap-2">
 
                           <button
-                            onClick={() => handleEmailReport(b.id)}
+                              onClick={() => handleEmailReport(b.id)}
                             className="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-md"
                           >
                             EMAIL REPORT
                           </button>
+
+                          <button
+                            onClick={() => { setEditingBuilding(b); setIsModalOpen(true); }}
+                            className="text-[10px] font-bold text-slate-700 hover:text-slate-900 bg-slate-50 px-2 py-1 rounded-md"
+                          >
+                            EDIT
+                          </button>
+
+                          <button
+                                onClick={async () => {
+                                  try {
+                                    await fetchBuildingSchedule(b.id);
+                                  } catch (e) {
+                                    // ignore - detail page will show absence or error
+                                  }
+                                  // navigate to building detail schedules tab
+                                  try {
+                                    router.push(`/dashboard/buildings/${b.id}?tab=schedules`);
+                                  } catch (err) {
+                                    window.location.href = `/dashboard/buildings/${b.id}?tab=schedules`;
+                                  }
+                                }}
+                                className="text-[10px] font-bold text-emerald-600 hover:text-emerald-800 bg-emerald-50 px-2 py-1 rounded-md"
+                              >
+                                GENERATE SCHEDULE
+                              </button>
 
                           <button
                             onClick={() => handleDelete(b.id)}
@@ -408,8 +439,9 @@ export default function DashboardPage() {
       <>
         <NewBuildingModal
           isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onSuccess={loadDashboardData}
+          initialData={editingBuilding}
+          onClose={() => { setIsModalOpen(false); setEditingBuilding(null); }}
+          onSuccess={() => { loadDashboardData(); setEditingBuilding(null); }}
         />
 
         <NewAssetModal

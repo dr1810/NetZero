@@ -50,7 +50,7 @@ export default function OnboardingGateway() {
     wallArea: "294.00",
     roofArea: "110.25",
     overallHeight: "7.00",
-    orientation: "2", // 2:North, 3:East, 4:South, 5:West
+    orientation: "2",
     glazingArea: "0.00",
     glazingAreaDistribution: "0",
   });
@@ -65,56 +65,43 @@ export default function OnboardingGateway() {
     setIsLoading(true);
     setError(null);
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    // Normalize base URL
+    const rawBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const baseUrl = rawBase.replace(/\/+$/g, "").replace(/\/api$/i, "");
 
     try {
       if (isSignUp) {
-        // --- SIGN UP & INITIALIZE TWIN MODEL FLOW ---
-        // Path corrected to /api/auth/register/
-        const registrationResponse = await fetch(`${baseUrl}/api/auth/register/`, {
+        const regResponse = await fetch(`${baseUrl}/api/auth/register/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            postcode: formData.postcode,
-            relative_compactness: parseFloat(formData.relativeCompactness),
-            surface_area: parseFloat(formData.surfaceArea),
-            wall_area: parseFloat(formData.wallArea),
-            roof_area: parseFloat(formData.roofArea),
-            overall_height: parseFloat(formData.overallHeight),
-            orientation: parseInt(formData.orientation),
-            glazing_area: parseFloat(formData.glazingArea),
-            glazing_area_distribution: parseInt(formData.glazingAreaDistribution),
-          }),
+          body: JSON.stringify({ email: formData.email, password: formData.password }),
         });
 
-        if (!registrationResponse.ok) {
-          const errData = await registrationResponse.json().catch(() => ({}));
-          throw new Error(errData.detail || "Failed to initialize new structural asset twin profile.");
+        if (!regResponse.ok) {
+          const err = await regResponse.text().catch(() => "");
+          throw new Error(err || "Registration failed.");
         }
 
-        const authData = await registrationResponse.json();
-        login(authData.access || authData.token);
-      } else {
-        // --- ACCESS CONSOLE SIGN-IN FLOW ---
-        // Path corrected to /api/auth/token/
-        const loginResponse = await fetch(`${baseUrl}/api/auth/token/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            username: formData.email, 
-            password: formData.password,
-          }),
-        });
-
-        if (!loginResponse.ok) {
-          throw new Error("Invalid node configuration credentials. Handshake rejected.");
-        }
-
-        const authData = await loginResponse.json();
-        login(authData.access || authData.token);
+        const regData = await regResponse.json();
+        console.log("Auth response (registration):", regData);
+        login(regData.access || regData.token || regData);
+        return;
       }
+
+      const loginResponse = await fetch(`${baseUrl}/api/token/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: formData.email, password: formData.password }),
+      });
+
+      if (!loginResponse.ok) {
+        const errBody = await loginResponse.text().catch(() => "");
+        throw new Error(errBody || "Invalid credentials. Handshake rejected.");
+      }
+
+      const authData = await loginResponse.json();
+      console.log("Auth response (login):", authData);
+      login(authData.access || authData.token || authData);
     } catch (err: any) {
       setError(err.message || "An error occurred within the authentication orchestration layer.");
     } finally {

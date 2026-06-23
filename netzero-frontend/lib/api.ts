@@ -3,7 +3,7 @@
 export const DJANGO_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 export interface BuildingProfile {
   id: number;
-  user_email: string;
+  owner?: number | null;
   postcode: string;
   grid_zone_id: string | null;
   relative_compactness: number;
@@ -20,7 +20,6 @@ export interface BuildingProfile {
 }
 
 export interface NewBuildingInput {
-  user_email: string;
   postcode: string;
   relative_compactness: number;
   surface_area: number;
@@ -54,16 +53,14 @@ export interface NewAssetInput {
 export const createAsset = async (
   payload: NewAssetInput
 ) => {
-  const res = await fetch(
-    `${DJANGO_BASE_URL}/assets/`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  const res = await fetch(buildUrl("/assets/"), {
+    method: "POST",
+    headers: {
+      ...buildAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 
   if (!res.ok) {
     const errorData = await res.text();
@@ -75,43 +72,224 @@ export const createAsset = async (
   return res.json();
 };
 
-export const fetchBuildings = async (): Promise<BuildingProfile[]> => {
-  const res = await fetch(`${DJANGO_BASE_URL}/buildings/`, { cache: 'no-store' });
-  
-  if (!res.ok) {
-    // Log the actual error response from Django
-    const errorData = await res.text(); 
-    console.error(`API Error ${res.status}:`, errorData);
-    
-    throw new Error(`Failed to retrieve building matrix records: ${res.status} ${res.statusText}`);
+function getAuthToken() {
+  try {
+    return localStorage.getItem("netzero_token");
+  } catch (e) {
+    return null;
   }
-  
+}
+
+function getRefreshToken() {
+  try {
+    return localStorage.getItem("netzero_refresh");
+  } catch (e) {
+    return null;
+  }
+}
+
+async function tryRefreshAccess(): Promise<boolean> {
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+
+  try {
+    const res = await fetch(buildUrl("/token/refresh/"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+
+    if (!res.ok) return false;
+
+    const data = await res.json().catch(() => null);
+    const newAccess = data?.access || data?.token || null;
+    const newRefresh = data?.refresh || null;
+    if (newAccess) {
+      localStorage.setItem("netzero_token", newAccess);
+      if (newRefresh) localStorage.setItem("netzero_refresh", newRefresh);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function authFetch(path: string, opts: RequestInit = {}, retry = true) {
+  const headers = Object.assign({}, opts.headers || {}, buildAuthHeaders());
+  const merged = Object.assign({}, opts, { headers });
+  const res = await fetch(buildUrl(path), merged);
+  if (res.ok) return res;
+
+  // On 401, attempt refresh once (don't rely on response body contents)
+  if (res.status === 401 && retry) {
+    const refreshed = await tryRefreshAccess();
+    if (refreshed) {
+      // retry once with new token
+      const headers2 = Object.assign({}, opts.headers || {}, buildAuthHeaders());
+      const merged2 = Object.assign({}, opts, { headers: headers2 });
+      return fetch(buildUrl(path), merged2);
+    } else {
+      // clear tokens, show toast and redirect to login
+      try { localStorage.removeItem("netzero_token"); localStorage.removeItem("netzero_refresh"); } catch (e) {}
+      if (typeof window !== 'undefined') {
+        try { showToast('Session expired. Redirecting to login...', 2500); } catch (e) {}
+        setTimeout(() => { window.location.href = '/login'; }, 1500);
+      }
+    }
+  }
+
+  return res;
+}
+
+function buildAuthHeaders(): Record<string, string> {
+  const token = getAuthToken();
+  if (!token) return {};
+  return { Authorization: `Bearer ${token}` };
+}
+
+function buildUrl(path: string) {
+  const raw = DJANGO_BASE_URL || "";
+  const base = raw.replace(/\/+$/g, "");
+  const cleanPath = path.replace(/^\/+/g, "");
+  if (base.endsWith("/api")) return `${base}/${cleanPath}`;
+  return `${base}/api/${cleanPath}`;
+}
+
+// Minimal toast helper (imperative, avoids adding new UI dependencies)
+function showToast(message: string, timeout = 3000) {
+  try {
+    const id = `netzero-toast-${Date.now()}`;
+    const el = document.createElement('div');
+    el.id = id;
+    el.style.position = 'fixed';
+    el.style.right = '16px';
+    el.style.bottom = '16px';
+    el.style.zIndex = '99999';
+    el.style.background = 'rgba(17,24,39,0.95)';
+    el.style.color = 'white';
+    el.style.padding = '10px 14px';
+    el.style.borderRadius = '8px';
+    el.style.boxShadow = '0 6px 20px rgba(2,6,23,0.4)';
+    el.style.fontSize = '13px';
+    el.innerText = message;
+    document.body.appendChild(el);
+    setTimeout(() => {
+      try { el.style.opacity = '0'; el.remove(); } catch (e) {}
+    }, timeout);
+  } catch (e) {
+    // fallback to alert when DOM operations fail
+    try { alert(message); } catch (e) {}
+  }
+}
+
+export const fetchBuildings = async (): Promise<BuildingProfile[]> => {
+  const token = getAuthToken();
+  if (!token) throw new Error("No access token found. Please sign in.");
+
+  const res = await authFetch("/buildings/", { cache: "no-store" });
+
+  if (!res.ok) {
+    const errorData = await res.text().catch(() => "");
+    console.error(`API Error ${res.status} on ${res.url}`);
+    try {
+      console.error("Response headers:", Array.from(res.headers.entries()));
+    } catch (e) {}
+    console.error("Response body:", errorData);
+
+    // If still unauthorized, remove tokens
+    if (res.status === 401) {
+      try { localStorage.removeItem("netzero_token"); localStorage.removeItem("netzero_refresh"); } catch (e) {}
+    }
+
+    throw new Error(`Failed to retrieve building matrix records: ${res.status} - ${errorData}`);
+  }
+
   return res.json();
 };
 
 export const fetchAssets = async (): Promise<AssetProfile[]> => {
-  const res = await fetch(`${DJANGO_BASE_URL}/assets/`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Failed to retrieve flexible asset registries.');
+  const token = getAuthToken();
+  if (!token) throw new Error("No access token found. Please sign in.");
+
+  const res = await fetch(buildUrl("/assets/"), {
+    cache: "no-store",
+    headers: buildAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    if (res.status === 401) {
+      try {
+        const parsed = JSON.parse(body || "{}");
+        if (parsed.code === "token_not_valid") localStorage.removeItem("netzero_token");
+      } catch (e) {}
+    }
+    throw new Error("Failed to retrieve flexible asset registries.");
+  }
+
   return res.json();
 };
 
 export const createBuildingProfile = async (payload: NewBuildingInput) => {
-  const res = await fetch(`${DJANGO_BASE_URL}/buildings/`, {
+  const res = await authFetch("/buildings/", {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+
+  // Try to read JSON body first, fall back to text
+  let bodyJson: any = null;
+  let bodyText = "";
+  try {
+    const txt = await res.text();
+    bodyText = txt;
+    try {
+      bodyJson = JSON.parse(txt || "null");
+    } catch (e) {
+      bodyJson = null;
+    }
+  } catch (e) {}
+
   if (!res.ok) {
-    const errorDetails = await res.json().catch(() => ({}));
-    throw new Error(errorDetails.user_email?.[0] || 'Validation constraints rejected input data.');
+    const messageFromBody = (bodyJson && (bodyJson.detail || bodyJson.message)) || (typeof bodyText === 'string' && bodyText.trim() ? bodyText : null);
+    const payloadToThrow = {
+      status: res.status,
+      url: res.url,
+      message: messageFromBody || `Validation constraints rejected input data (status ${res.status}).`,
+      body: bodyJson || bodyText || null,
+    };
+
+    console.error('Create building failed:', res.status, res.url, payloadToThrow);
+    throw new Error(JSON.stringify(payloadToThrow));
   }
+
+  return bodyJson;
+};
+
+export const updateBuilding = async (id: number, payload: NewBuildingInput) => {
+  const res = await authFetch(`/buildings/${id}/`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    let bodyText = "";
+    try { bodyText = await res.text(); } catch (e) {}
+    let bodyJson = null;
+    try { bodyJson = JSON.parse(bodyText || "null"); } catch (e) { bodyJson = null; }
+    const message = (bodyJson && (bodyJson.detail || bodyJson.message)) || bodyText || `Update failed (${res.status})`;
+    throw new Error(message);
+  }
+
   return res.json();
 };
 
 export const deleteBuilding = async (id: number) => {
-  const res = await fetch(`${DJANGO_BASE_URL}/buildings/${id}/`, {
+  const res = await fetch(buildUrl(`/buildings/${id}/`), {
     method: 'DELETE',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { ...buildAuthHeaders(), 'Content-Type': 'application/json' },
   });
   
   if (!res.ok) {
@@ -120,19 +298,33 @@ export const deleteBuilding = async (id: number) => {
   return true;
 };
 
+export const fetchBuilding = async (id: number) => {
+  const res = await authFetch(`/buildings/${id}/`);
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(err || `Failed to fetch building ${id}`);
+  }
+  return res.json();
+};
+
 export const emailReport = async (id: number) => {
-  const res = await fetch(
-    `${DJANGO_BASE_URL}/buildings/${id}/email_report/`,
-    {
-      method: "POST",
-    }
-  );
+  const res = await authFetch(`/buildings/${id}/email_report/`, { method: 'POST' });
+
+  let bodyText = "";
+  try {
+    bodyText = await res.text();
+  } catch (e) {}
+
+  let bodyJson: any = null;
+  try { bodyJson = JSON.parse(bodyText || "null"); } catch (e) { bodyJson = null; }
 
   if (!res.ok) {
-    throw new Error("Failed to send report.");
+    const reason = bodyJson?.reason || bodyJson?.detail || bodyText || `Status ${res.status}`;
+    try { showToast(`Report send failed: ${reason}`); } catch (e) {}
+    throw new Error(reason);
   }
 
-  return res.json();
+  return bodyJson;
 };
 
 export interface CarbonPreference {
@@ -147,10 +339,11 @@ export async function createCarbonPreference(
   payload: CarbonPreference
 ) {
   const response = await fetch(
-    `${DJANGO_BASE_URL}/carbon-preferences/`,
+    buildUrl("/carbon-preferences/"),
     {
       method: "POST",
       headers: {
+        ...buildAuthHeaders(),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -169,10 +362,11 @@ export async function updateCarbonPreference(
   payload: CarbonPreference
 ) {
   const response = await fetch(
-    `${DJANGO_BASE_URL}/carbon-preferences/${id}/`,
+    buildUrl(`/carbon-preferences/${id}/`),
     {
       method: "PUT",
       headers: {
+        ...buildAuthHeaders(),
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -184,4 +378,75 @@ export async function updateCarbonPreference(
   }
 
   return response.json();
+}
+
+export async function downloadESGReport(buildingId: number) {
+  const token = getAuthToken();
+  if (!token) throw new Error("No access token found. Please sign in.");
+
+  const res = await authFetch(`/buildings/${buildingId}/generate_report/`);
+
+  if (!res.ok) {
+    // Try to extract useful error information (JSON or text)
+    let body = "";
+    try {
+      const txt = await res.text();
+      // Try JSON first
+      try {
+        const j = JSON.parse(txt || "{}");
+        body = j.detail || j.message || JSON.stringify(j);
+      } catch (e) {
+        body = txt || `${res.status} ${res.statusText}`;
+      }
+    } catch (e) {
+      body = `${res.status} ${res.statusText}`;
+    }
+
+    // If unauthorized, clear tokens to force login on next action
+    if (res.status === 401 || res.status === 403) {
+      try { localStorage.removeItem("netzero_token"); localStorage.removeItem("netzero_refresh"); } catch (e) {}
+      throw new Error(`Authentication error (${res.status}) — please sign in again.`);
+    }
+
+    console.error('ESG report download failed:', res.status, body);
+    throw new Error(body || `Failed to download report: ${res.status}`);
+  }
+
+  const blob = await res.blob();
+
+  // Prefer filename from Content-Disposition, fallback to building-specific CSV
+  let filename = `esg_report_${buildingId}.csv`;
+  try {
+    const cd = res.headers.get("Content-Disposition") || "";
+    const match = cd.match(/filename\*=UTF-8''([^;\n\r]+)/) || cd.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) {
+      filename = decodeURIComponent(match[1]);
+    } else {
+      const ct = res.headers.get("Content-Type") || "";
+      if (ct.includes("csv")) filename = `esg_report_${buildingId}.csv`;
+      else if (ct.includes("pdf")) filename = `esg_report_${buildingId}.pdf`;
+    }
+  } catch (e) {}
+
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+export async function fetchBuildingSchedule(buildingId: number) {
+  const token = getAuthToken();
+  if (!token) throw new Error("No access token found. Please sign in.");
+  const res = await authFetch(`/buildings/${buildingId}/schedule/`);
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Failed to fetch schedule: ${res.status}`);
+  }
+
+  return res.json();
 }

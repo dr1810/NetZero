@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { ArrowRight, Leaf, Zap, ShieldAlert, Cpu, Building2, User, Sparkles, PlusCircle } from "lucide-react";
 
 const personas = [
@@ -34,6 +36,17 @@ const pillars = [
 
 export default function LandingPage() {
   const [hasMounted, setHasMounted] = useState(false);
+  const router = useRouter();
+  const { isAuthenticated, userEmail } = useAuth();
+
+  function initialsFromEmail(email?: string | null) {
+    if (!email) return "ME";
+    const name = email.split("@")[0];
+    const parts = name.split(/[._\-]/).filter(Boolean);
+    if (parts.length === 0) return name.substring(0,2).toUpperCase();
+    if (parts.length === 1) return parts[0].substring(0,2).toUpperCase();
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
 
   // Force the layout to only render once the client environment is 100% ready
   useEffect(() => {
@@ -56,20 +69,26 @@ export default function LandingPage() {
         </div>
 
         <div className="flex items-center gap-6">
-          <Link 
-            href="/login" 
-            className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50"
-          >
-            <User className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 transition-colors duration-300" />
-            <span>Sign In</span>
-          </Link>
+          {isAuthenticated ? (
+            <Link href="/dashboard/settings" className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50">
+              <div className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-emerald-600 text-white text-xs font-semibold">{initialsFromEmail(userEmail)}</div>
+            </Link>
+          ) : (
+            <Link 
+              href="/login" 
+              className="cursor-pointer inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-emerald-600 transition-colors group relative z-50"
+            >
+              <User className="h-4 w-4 text-slate-400 group-hover:text-emerald-500 transition-colors duration-300" />
+              <span>Sign In</span>
+            </Link>
+          )}
 
-          <Link 
-            href="/dashboard"
+          <button
+            onClick={() => router.push(isAuthenticated ? '/dashboard' : '/login')}
             className="group inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 font-sans relative z-50"
           >
             Launch Workspace <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-          </Link>
+          </button>
         </div>
       </header>
 
@@ -107,12 +126,12 @@ export default function LandingPage() {
               Initialize Digital Twin Profile
             </Link>
 
-            <Link
-              href="/dashboard"
+            <button
+              onClick={() => router.push(isAuthenticated ? '/dashboard' : '/login')}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg transition-all duration-300 group"
             >
               Enter Control Console <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Link>
+            </button>
           </div>
         </div>
 
