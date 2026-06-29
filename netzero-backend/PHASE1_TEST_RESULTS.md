@@ -89,3 +89,13 @@
    - Manual trigger controls
    - Historical trends
 
+## Running Manual Tests
+
+To manually test the Phase 1 backend:
+
+```bash
+cd netzero-backend
+source venv/bin/activate
+python scripts/demo_phase1.py
+```
+

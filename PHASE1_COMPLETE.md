@@ -315,7 +315,7 @@ celery -A config beat -l info
 1. **Manual Testing**
    ```bash
    cd netzero-backend
-   python test_phase1_final.py
+   python scripts/demo_phase1.py
    ```
 
 2. **API Testing**
