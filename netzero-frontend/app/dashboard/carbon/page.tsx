@@ -69,7 +69,24 @@ export default function CarbonMonitoringPage() {
       setAssets(assetsRes.filter((a) => a.building === selectedBuilding));
       setError(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load carbon data';
+      // Check if it's a 503 service unavailable
+      let message = 'Failed to load carbon data';
+      
+      if (err instanceof Error) {
+        try {
+          const errorData = JSON.parse(err.message);
+          if (errorData.status === 503) {
+            message = '⚠️ Backend not ready: Database migrations need to be applied on Render. Please run: python manage.py migrate';
+          } else if (errorData.status === 404) {
+            message = 'Carbon preferences not configured for this building. Please create one via Django admin.';
+          } else {
+            message = errorData.message || err.message;
+          }
+        } catch {
+          message = err.message;
+        }
+      }
+      
       setError(message);
     } finally {
       setRefreshing(false);
@@ -195,9 +212,27 @@ export default function CarbonMonitoringPage() {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
-          <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-red-800">{error}</p>
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-start gap-2 mb-2">
+            <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-red-800 font-medium">Error Loading Carbon Data</p>
+              <p className="text-red-700 text-sm mt-1">{error}</p>
+            </div>
+          </div>
+          {error.includes('migrations') && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
+              <p className="font-medium text-yellow-800 mb-1">🔧 Quick Fix:</p>
+              <ol className="list-decimal list-inside text-yellow-700 space-y-1">
+                <li>Go to Render Dashboard → Your Service → Shell</li>
+                <li>Run: <code className="bg-yellow-100 px-1 rounded">python manage.py migrate</code></li>
+                <li>Refresh this page</li>
+              </ol>
+              <p className="text-yellow-600 mt-2 text-xs">
+                See <a href="https://github.com/dr1810/NetZero/blob/main/DEPLOYMENT_GUIDE.md" target="_blank" rel="noopener noreferrer" className="underline">DEPLOYMENT_GUIDE.md</a> for details
+              </p>
+            </div>
+          )}
         </div>
       )}
 
