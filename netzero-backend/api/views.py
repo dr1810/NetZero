@@ -558,4 +558,146 @@ class OperationalScheduleViewSet(viewsets.ModelViewSet):
             OperationalScheduleSerializer(obj).data,
             status=status.HTTP_201_CREATED
         )
+
+
+class CarbonMonitoringViewSet(viewsets.ViewSet):
+    """
+    API endpoints for carbon-aware monitoring and modulation.
+    """
+    permission_classes = [IsAuthenticated]
+    
+    @action(detail=True, methods=['get'], url_path='carbon-intensity')
+    def get_carbon_intensity(self, request, pk=None):
+        """
+        GET /api/buildings/{id}/carbon-intensity/
+        
+        Returns current carbon intensity for the building's region.
+        """
+        from api.services.carbon_monitor import should_trigger_modulation
+        
+        try:
+            should_modulate, carbon_data = should_trigger_modulation(pk)
+            
+            if carbon_data is None:
+                return Response(
+                    {"error": "Could not fetch carbon intensity data"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+            
+            return Response({
+                "current_intensity": carbon_data["current_intensity"],
+                "threshold": carbon_data["threshold"],
+                "index": carbon_data["index"],
+                "region_id": carbon_data["region_id"],
+                "timestamp": carbon_data["timestamp"],
+                "source": carbon_data["source"],
+                "should_modulate": should_modulate
+            })
+            
+        except BuildingProfile.DoesNotExist:
+            return Response(
+                {"error": "Building not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Failed to get carbon intensity for building {pk}: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'], url_path='modulation-events')
+    def get_modulation_events(self, request, pk=None):
+        """
+        GET /api/buildings/{id}/modulation-events/
+        
+        Returns paginated modulation event history.
+        Query params: page, page_size (default 20), action_type, asset_id
+        """
+        from api.models import ModulationEvent
+        from rest_framework.pagination import PageNumberPagination
+        
+        try:
+            building = BuildingProfile.objects.get(id=pk)
+            
+            queryset = ModulationEvent.objects.filter(building=building).select_related('asset')
+            
+            # Filter by action type if provided
+            action_type = request.query_params.get('action_type')
+            if action_type:
+                queryset = queryset.filter(action_type=action_type)
+            
+            # Filter by asset if provided
+            asset_id = request.query_params.get('asset_id')
+            if asset_id:
+                queryset = queryset.filter(asset_id=asset_id)
+            
+            # Paginate
+            paginator = PageNumberPagination()
+            paginator.page_size = int(request.query_params.get('page_size', 20))
+            page = paginator.paginate_queryset(queryset, request)
+            
+            events_data = [
+                {
+                    "id": event.id,
+                    "asset_id": event.asset.id,
+                    "asset_name": event.asset.name,
+                    "action_type": event.action_type,
+                    "trigger_type": event.trigger_type,
+                    "carbon_intensity_at_time": event.carbon_intensity_at_time,
+                    "carbon_threshold": event.carbon_threshold,
+                    "previous_state": event.previous_state,
+                    "new_state": event.new_state,
+                    "reason": event.reason,
+                    "estimated_carbon_saved_kg": event.estimated_carbon_saved_kg,
+                    "triggered_at": event.triggered_at,
+                    "duration_minutes": event.duration_minutes,
+                    "initiated_by": event.initiated_by
+                }
+                for event in page
+            ]
+            
+            return paginator.get_paginated_response(events_data)
+            
+        except BuildingProfile.DoesNotExist:
+            return Response(
+                {"error": "Building not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Failed to get modulation events for building {pk}: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['post'], url_path='trigger-modulation')
+    def trigger_modulation(self, request, pk=None):
+        """
+        POST /api/buildings/{id}/trigger-modulation/
+        
+        Manually trigger carbon-aware modulation check for a building.
+        Optional body: { "dry_run": true }
+        """
+        from api.services.asset_scheduler import run_carbon_aware_scheduler
+        
+        try:
+            building = BuildingProfile.objects.get(id=pk)
+            dry_run = request.data.get('dry_run', False)
+            
+            result = run_carbon_aware_scheduler(building.id, dry_run=dry_run)
+            
+            return Response(result, status=status.HTTP_200_OK)
+            
+        except BuildingProfile.DoesNotExist:
+            return Response(
+                {"error": "Building not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Failed to trigger modulation for building {pk}: {e}")
+            return Response(
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     

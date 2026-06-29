@@ -195,3 +195,75 @@ class NotificationEvent(models.Model):
 
     def __str__(self):
         return f"Notification {self.event_type} for {self.building.postcode} at {self.triggered_at.isoformat()}"
+
+
+class ModulationEvent(models.Model):
+    """
+    Logs carbon-aware asset modulation events for audit trail and analytics.
+    Tracks when assets are modulated, why, and the carbon context.
+    """
+    ACTION_TYPES = [
+        ('DELAYED', 'Delayed'),
+        ('REDUCED', 'Reduced Capacity'),
+        ('SHUTDOWN', 'Temporarily Shutdown'),
+        ('RESTORED', 'Restored to Normal'),
+    ]
+    
+    TRIGGER_TYPES = [
+        ('AUTOMATIC', 'Automatic (Carbon Threshold)'),
+        ('MANUAL', 'Manual User Override'),
+        ('SCHEDULED', 'Pre-scheduled'),
+    ]
+    
+    asset = models.ForeignKey(
+        FlexibleAsset,
+        on_delete=models.CASCADE,
+        related_name='modulation_events'
+    )
+    
+    building = models.ForeignKey(
+        BuildingProfile,
+        on_delete=models.CASCADE,
+        related_name='modulation_events'
+    )
+    
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    trigger_type = models.CharField(max_length=20, choices=TRIGGER_TYPES, default='AUTOMATIC')
+    
+    # Carbon context at time of modulation
+    carbon_intensity_at_time = models.FloatField(help_text="gCO2/kWh")
+    carbon_threshold = models.FloatField(help_text="Threshold that triggered action")
+    
+    # Asset state changes
+    previous_state = models.BooleanField(help_text="Previous is_modulated_active state")
+    new_state = models.BooleanField(help_text="New is_modulated_active state")
+    
+    # Context and reasoning
+    reason = models.TextField(help_text="Human-readable reason for modulation")
+    estimated_carbon_saved_kg = models.FloatField(null=True, blank=True)
+    
+    # Timing
+    triggered_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    duration_minutes = models.IntegerField(
+        null=True, 
+        blank=True,
+        help_text="How long the modulation lasted (filled when restored)"
+    )
+    
+    # Metadata
+    initiated_by = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        help_text="User email if manual, 'system' if automatic"
+    )
+    
+    class Meta:
+        ordering = ['-triggered_at']
+        indexes = [
+            models.Index(fields=['building', '-triggered_at'], name='idx_building_modulation'),
+            models.Index(fields=['asset', '-triggered_at'], name='idx_asset_modulation'),
+        ]
+    
+    def __str__(self):
+        return f"{self.asset.name} {self.action_type} @ {self.triggered_at.isoformat()}"

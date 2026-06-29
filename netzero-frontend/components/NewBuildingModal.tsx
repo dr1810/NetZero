@@ -137,7 +137,7 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess, initialDa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string[]>([]);
-  const [inferenceResult, setInferenceResult] = useState<unknown | null>(null);
+  const [inferenceResult, setInferenceResult] = useState<Record<string, unknown> | null>(null);
   const [existingId, setExistingId] = useState<number | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<NumericField, string>>>({});
   const router = useRouter();
@@ -396,7 +396,7 @@ export default function NewBuildingModal({ isOpen, onClose, onSuccess, initialDa
         )}
 
         {/* Inference Results display */}
-        {inferenceResult && (
+        {inferenceResult !== null && (
            <div className="mt-6 p-4 rounded-xl border border-emerald-200 bg-emerald-50/60">
              {/* ... Result details ... */}
            </div>

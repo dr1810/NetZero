@@ -450,3 +450,107 @@ export async function fetchBuildingSchedule(buildingId: number) {
 
   return res.json();
 }
+
+// ============================================================
+// CARBON MONITORING API (Phase 1)
+// ============================================================
+
+export interface CarbonIntensityResponse {
+  current_intensity: number;
+  timestamp: string;
+  index: string;
+  region_id: string;
+  source: string;
+  threshold: number;
+  should_modulate: boolean;
+}
+
+export interface ModulationEvent {
+  id: number;
+  building: number;
+  asset: number;
+  asset_name: string;
+  action_type: 'DELAYED' | 'REDUCED' | 'SHUTDOWN' | 'RESTORED';
+  trigger_type: 'AUTOMATIC' | 'MANUAL' | 'SCHEDULED';
+  triggered_at: string;
+  carbon_intensity_at_time: number;
+  carbon_threshold: number;
+  carbon_intensity_index: string;
+  estimated_carbon_saved_kg: number | null;
+}
+
+export interface ModulationEventsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: ModulationEvent[];
+}
+
+export interface TriggerModulationResponse {
+  status: 'success' | 'dry_run' | 'no_action' | 'error';
+  message?: string;
+  applied_count?: number;
+  decisions?: Array<{
+    asset_id: number;
+    asset_name: string;
+    action: string;
+    current_state: boolean;
+    new_state: boolean;
+    estimated_carbon_saved?: number;
+  }>;
+}
+
+/**
+ * Get current carbon intensity for a building
+ */
+export async function getCarbonIntensity(buildingId: number): Promise<CarbonIntensityResponse> {
+  const res = await authFetch(`/buildings/${buildingId}/carbon-intensity/`);
+  
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Failed to fetch carbon intensity: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+/**
+ * Get modulation events for a building (paginated)
+ */
+export async function getModulationEvents(
+  buildingId: number,
+  page: number = 1,
+  pageSize: number = 10
+): Promise<ModulationEventsResponse> {
+  const res = await authFetch(
+    `/buildings/${buildingId}/modulation-events/?page=${page}&page_size=${pageSize}`
+  );
+  
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Failed to fetch modulation events: ${res.status}`);
+  }
+  
+  return res.json();
+}
+
+/**
+ * Manually trigger modulation for a building
+ */
+export async function triggerModulation(
+  buildingId: number,
+  dryRun: boolean = false
+): Promise<TriggerModulationResponse> {
+  const res = await authFetch(`/buildings/${buildingId}/trigger-modulation/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+  
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Failed to trigger modulation: ${res.status}`);
+  }
+  
+  return res.json();
+}

@@ -4,7 +4,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BarChart3, Settings, Leaf, Building2 } from "lucide-react";
+import { LayoutDashboard, BarChart3, Settings, Leaf, Building2, Activity } from "lucide-react";
 import { User, LogOut } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,7 @@ const navigationItems = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Analytics Engine", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Matrix Inventory", href: "/dashboard/buildings", icon: Building2 },
+  { name: "Carbon Monitor", href: "/dashboard/carbon", icon: Activity },
   { name: "Control Center", href: "/dashboard/settings", icon: Settings },
 ];
 

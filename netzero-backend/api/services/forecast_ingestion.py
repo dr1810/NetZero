@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import requests
 from django.utils import timezone
@@ -16,14 +16,14 @@ class RegionIngestionResult:
     region_id: str
     stored_points: int
     used_fallback: bool
-    error: str | None = None
+    error: Optional[str] = None
 
 
 def _fetch_region_forecast_payload(
     region_id: str,
     timeout: float = 8.0,
     http_client=requests,
-) -> list[dict]:
+) -> List[dict]:
     from_ts = timezone.now().replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%MZ")
     endpoint = f"https://api.carbonintensity.org.uk/regional/intensity/{from_ts}/fw24h/regionid/{region_id}"
 

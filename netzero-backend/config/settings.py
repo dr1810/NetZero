@@ -167,4 +167,8 @@ CELERY_BEAT_SCHEDULE = {
         "task": "api.tasks.ingest_hourly_carbon_forecasts_task",
         "schedule": crontab(minute=0),
     },
+    "run-carbon-aware-modulation": {
+        "task": "api.tasks.run_carbon_aware_modulation_task",
+        "schedule": crontab(minute='*/15'),  # Every 15 minutes
+    },
 }

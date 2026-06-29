@@ -5,7 +5,8 @@ from .views import (
     BuildingProfileViewSet,
     FlexibleAssetViewSet,
     CarbonPreferenceViewSet,
-    OperationalScheduleViewSet
+    OperationalScheduleViewSet,
+    CarbonMonitoringViewSet
 )
 
 router = DefaultRouter()
@@ -16,6 +17,10 @@ router.register(r'assets', FlexibleAssetViewSet)
 router.register(r'preferences', CarbonPreferenceViewSet)
 
 router.register(r'schedules', OperationalScheduleViewSet)
+
+# Register carbon monitoring endpoints under buildings
+# e.g., /api/buildings/{id}/carbon-intensity/
+router.register(r'buildings', CarbonMonitoringViewSet, basename='carbon-monitoring')
 
 
 urlpatterns = [

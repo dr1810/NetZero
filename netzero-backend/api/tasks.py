@@ -44,3 +44,52 @@ def ingest_hourly_carbon_forecasts_task() -> dict:
     Includes API-failure fallback to latest cached data.
     """
     return ingest_forecasts_for_active_regions()
+
+
+@shared_task
+def run_carbon_aware_modulation_task() -> dict:
+    """
+    Periodic task to check carbon intensity and modulate assets for all buildings
+    with automation enabled.
+    
+    Runs every 15 minutes to ensure responsive modulation.
+    """
+    from api.services.asset_scheduler import run_carbon_aware_scheduler
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Find buildings with automation enabled
+    buildings = BuildingProfile.objects.filter(
+        carbon_preference__automation_enabled=True
+    ).select_related('carbon_preference')
+    
+    results = {
+        "buildings_processed": 0,
+        "total_modulations": 0,
+        "errors": 0
+    }
+    
+    for building in buildings:
+        try:
+            result = run_carbon_aware_scheduler(building.id, dry_run=False)
+            results["buildings_processed"] += 1
+            
+            if result["status"] == "success":
+                results["total_modulations"] += result.get("applied_count", 0)
+            else:
+                results["errors"] += 1
+                logger.warning(f"Scheduler failed for building {building.id}: {result.get('message')}")
+                
+        except Exception as e:
+            logger.error(f"Error processing building {building.id}: {e}")
+            results["errors"] += 1
+    
+    logger.info(
+        f"Carbon-aware modulation task completed: "
+        f"{results['buildings_processed']} buildings, "
+        f"{results['total_modulations']} modulations applied, "
+        f"{results['errors']} errors"
+    )
+    
+    return results

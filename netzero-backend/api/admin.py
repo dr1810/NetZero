@@ -6,6 +6,7 @@ from .models import (
 	CarbonForecast,
 	CarbonPreference,
 	NotificationEvent,
+	ModulationEvent,
 )
 
 
@@ -42,3 +43,12 @@ class NotificationEventAdmin(admin.ModelAdmin):
 	list_display = ("id", "building", "event_type", "triggered_at", "delivered")
 	list_filter = ("event_type", "delivered")
 	search_fields = ("building__postcode", "recipient", "message")
+
+
+@admin.register(ModulationEvent)
+class ModulationEventAdmin(admin.ModelAdmin):
+	list_display = ("id", "asset", "building", "action_type", "trigger_type", "carbon_intensity_at_time", "triggered_at")
+	list_filter = ("action_type", "trigger_type", "building")
+	search_fields = ("asset__name", "building__postcode", "reason")
+	readonly_fields = ("triggered_at",)
+	date_hierarchy = "triggered_at"
