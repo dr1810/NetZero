@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Leaf, ArrowRight, Building2, MapPin, ShieldCheck, HelpCircle, Loader2, AlertCircle } from "lucide-react";
 
@@ -34,12 +33,12 @@ const AVAILABLE_POSTCODES = [
 ];
 
 export default function OnboardingGateway() {
-  const router = useRouter();
   const { login } = useAuth();
   
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -83,8 +82,15 @@ export default function OnboardingGateway() {
         }
 
         const regData = await regResponse.json();
-        console.log("Auth response (registration):", regData);
-        login(regData.access || regData.token || regData);
+        if (regData?.access || regData?.token) {
+          login(regData.access || regData.token || regData);
+          return;
+        }
+
+        setVerificationMessage(
+          regData?.detail || "Registration complete. Check your email to verify your account."
+        );
+        setIsSignUp(false);
         return;
       }
 
@@ -102,12 +108,46 @@ export default function OnboardingGateway() {
       const authData = await loginResponse.json();
       console.log("Auth response (login):", authData);
       login(authData.access || authData.token || authData);
-    } catch (err: any) {
-      setError(err.message || "An error occurred within the authentication orchestration layer.");
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "An error occurred within the authentication orchestration layer."
+      );
     } finally {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const query = new URLSearchParams(window.location.search);
+    const verifyFlag = query.get("verify_email");
+    const token = query.get("token");
+    if (verifyFlag !== "1" || !token) return;
+
+    const rawBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+    const baseUrl = rawBase.replace(/\/+$/g, "").replace(/\/api$/i, "");
+
+    fetch(`${baseUrl}/api/auth/verify-email/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.detail || "Email verification failed.");
+        }
+        setVerificationMessage(data?.detail || "Email verified successfully.");
+        if (data?.access || data?.token) {
+          login(data.access || data.token || data);
+        }
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Email verification failed.");
+      });
+  }, [login]);
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500/10 selection:text-emerald-600">
@@ -141,6 +181,13 @@ export default function OnboardingGateway() {
               <div>
                 <span className="font-bold">Pipeline Error:</span> {error}
               </div>
+            </div>
+          )}
+
+          {verificationMessage && (
+            <div className="flex items-start gap-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-xs font-mono leading-relaxed">
+              <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+              <div>{verificationMessage}</div>
             </div>
           )}
 
@@ -311,7 +358,7 @@ export default function OnboardingGateway() {
               By collecting your property parameters upfront, NetZero automatically instantiates a local structural mathematical profile. 
             </p>
             <p className="text-xs text-slate-400 leading-relaxed font-normal">
-              This structural map is evaluated on your edge system against Great Britain's National Grid ESO API timeline forecasts to calculate real-time load shifting decisions instantly.
+              This structural map is evaluated on your edge system against Great Britain&apos;s National Grid ESO API timeline forecasts to calculate real-time load shifting decisions instantly.
             </p>
           </div>
         </div>

@@ -62,11 +62,6 @@ class BuildingProfile(models.Model):
     predicted_heating_load = models.FloatField(null=True, blank=True, default=0.0)
     predicted_cooling_load = models.FloatField(null=True, blank=True, default=0.0)
 
-    class Meta:
-        constraints = [
-            models.UniqueConstraint(fields=["owner", "postcode"], name="unique_owner_postcode")
-        ]
-
 class FlexibleAsset(models.Model):
     """
     Tracks electrical operational hardware units targeted for dynamic 
@@ -112,6 +107,34 @@ class OperationalSchedule(models.Model):
     def __str__(self):
         return f"Schedule for {self.building.user_email}"
     
+
+class CarbonForecast(models.Model):
+    """
+    Chronological 24-hour regional carbon-intensity forecasts indexed by region and timestamp.
+    """
+    region_id = models.CharField(max_length=16, db_index=True)
+    forecast_time = models.DateTimeField(db_index=True)
+    fetched_at = models.DateTimeField(auto_now=True, db_index=True)
+    source = models.CharField(max_length=64, default="national_grid_eso")
+    intensity_forecast = models.FloatField()
+    generation_mix = models.JSONField(default=list, blank=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["region_id", "forecast_time"],
+                name="unique_region_forecast_timestamp",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["region_id", "forecast_time"], name="idx_region_forecast_time"),
+        ]
+        ordering = ["region_id", "forecast_time"]
+
+    def __str__(self):
+        return f"Region {self.region_id} @ {self.forecast_time.isoformat()} ({self.intensity_forecast})"
+
 
 class CarbonPreference(models.Model):
     building = models.OneToOneField(

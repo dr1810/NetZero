@@ -3,6 +3,7 @@ from celery import shared_task
 from django.utils import timezone
 from api.models import BuildingProfile
 from api.services.notification_service import analyze_forecast_and_notify
+from api.services.forecast_ingestion import ingest_forecasts_for_active_regions
 import random
 
 
@@ -34,3 +35,12 @@ def run_notification_analysis_task(simulate: bool = True, send: bool = False) ->
             continue
 
     return {"created": total_created}
+
+
+@shared_task
+def ingest_hourly_carbon_forecasts_task() -> dict:
+    """
+    Hourly ESO forecast ingestion across active regions.
+    Includes API-failure fallback to latest cached data.
+    """
+    return ingest_forecasts_for_active_regions()

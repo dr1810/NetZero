@@ -1,8 +1,5 @@
 # api/views.py
 
-import os
-import random
-import requests
 from rest_framework.decorators import action
 from django.http import HttpResponse
 import csv
@@ -13,7 +10,6 @@ from ml.predictor import predict_loads
 from rest_framework.permissions import IsAuthenticated
 
 from rest_framework import status, viewsets
-from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
@@ -39,6 +35,13 @@ from .services.ml_inference import run_thermodynamic_inference, generate_mock_sc
 from .services.schedule_generator import generate_schedule_for_building
 from .services.email_dispatcher import send_sustainability_report
 from .services.notification_service import analyze_forecast_and_notify
+from .services.postcode_region import map_postcode_to_region_id
+from .services.auth_verification import (
+    build_email_verification_token,
+    build_verification_url,
+    send_auth_verification_email,
+    verify_email_token,
+)
 class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
     serializer_class = CarbonPreferenceSerializer
@@ -122,46 +125,10 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
                 self.logger.warning("IntegrityError while creating BuildingProfile for user=%s: %s", request.user, str(e))
             except Exception:
                 pass
-            return Response({"detail": "Building already exists for this owner and postcode."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"detail": "Unable to create building profile due to a data integrity constraint."}, status=status.HTTP_400_BAD_REQUEST)
         
-        # --- Epic 2 Workflow: Clean and Parse UK Postcode Structure ---
-        raw_pc = profile_instance.postcode.strip().upper()
-        
-        # Extract the outward code component (e.g., "E1" from "E1 6AN" or "E16AN")
-        if " " in raw_pc:
-            outward_code = raw_pc.split(" ")[0]
-        else:
-            # Fallback if they type it without a space: take everything except the last 3 characters
-            outward_code = raw_pc[:-3] if len(raw_pc) > 3 else raw_pc
-
-        eso_endpoint = f"https://api.carbonintensity.org.uk/regional/postcode/{outward_code}"
-        
-        try:
-            api_response = requests.get(eso_endpoint, timeout=5.0)
-            if api_response.status_code == 200:
-                json_data = api_response.json()
-                if "data" in json_data and len(json_data["data"]) > 0:
-                    extracted_payload = json_data["data"][0]
-                    zone_id = extracted_payload.get("regionid") or extracted_payload.get("regionId")
-                    if zone_id:
-                        profile_instance.grid_zone_id = str(zone_id)
-                    else:
-                        profile_instance.grid_zone_id = "ZONE_NOT_FOUND"
-                else:
-                    profile_instance.grid_zone_id = "DATA_EMPTY"
-            else:
-                # If the outward code fails, let's try the raw string with a space as a resilient fallback
-                fallback_pc = raw_pc if " " in raw_pc else f"{raw_pc[:-3]} {raw_pc[-3:]}"
-                fallback_endpoint = f"https://api.carbonintensity.org.uk/regional/postcode/{fallback_pc}"
-                fallback_res = requests.get(fallback_endpoint, timeout=4.0)
-                
-                if fallback_res.status_code == 200:
-                    extracted_payload = fallback_res.json().get('data', [{}])[0]
-                    profile_instance.grid_zone_id = str(extracted_payload.get('regionid', 'UNKNOWN'))
-                else:
-                    profile_instance.grid_zone_id = f"API_ERR_{api_response.status_code}"
-        except Exception:
-            profile_instance.grid_zone_id = "TIMEOUT_FALLBACK"
+        mapped_region_id = map_postcode_to_region_id(profile_instance.postcode)
+        profile_instance.grid_zone_id = mapped_region_id or "UNKNOWN"
 
         # --- Epic 3 Workflow: Run Local PyTorch Multi-Layer Inference Engine ---
         heating_load, cooling_load = run_thermodynamic_inference(
@@ -184,6 +151,18 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_201_CREATED
         )
+
+    def update(self, request, *args, **kwargs):
+        response = super().update(request, *args, **kwargs)
+        if response.status_code not in (status.HTTP_200_OK, status.HTTP_202_ACCEPTED):
+            return response
+
+        profile_instance = self.get_object()
+        mapped_region_id = map_postcode_to_region_id(profile_instance.postcode)
+        if mapped_region_id and profile_instance.grid_zone_id != mapped_region_id:
+            profile_instance.grid_zone_id = mapped_region_id
+            profile_instance.save(update_fields=["grid_zone_id"])
+        return response
     @action(detail=True, methods=["get"])
     def generate_report(self, request, pk=None):
 
@@ -466,7 +445,7 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
 
 
 class RegisterView(APIView):
-    """Simple registration endpoint that creates a user and returns JWT tokens."""
+    """Registration endpoint that creates an inactive user and emails verification link."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -483,14 +462,63 @@ class RegisterView(APIView):
         if User.objects.filter(username=username).exists():
             return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
 
-        user = User.objects.create_user(username=username, email=email, password=password)
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            is_active=False,
+        )
+
+        token = build_email_verification_token(user)
+        verification_url = build_verification_url(token)
+        sent, reason = send_auth_verification_email(email=user.email, verification_url=verification_url)
+        if not sent:
+            logger.warning("Verification email not sent for user=%s reason=%s", user.username, reason)
+
+        return Response(
+            {
+                "detail": "Registration successful. Please verify your email before logging in.",
+                "verification_email_sent": bool(sent),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class VerifyEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get("token")
+        if not token:
+            return Response({"detail": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payload = verify_email_token(token)
+        except Exception:
+            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
+
+        User = get_user_model()
+        user_id = payload.get("user_id")
+        email = payload.get("email")
+
+        try:
+            user = User.objects.get(id=user_id, email=email)
+        except User.DoesNotExist:
+            return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
 
         refresh = RefreshToken.for_user(user)
-
-        return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "detail": "Email verified successfully.",
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 

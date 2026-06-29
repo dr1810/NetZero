@@ -3,6 +3,7 @@ from .models import (
 	BuildingProfile,
 	FlexibleAsset,
 	OperationalSchedule,
+	CarbonForecast,
 	CarbonPreference,
 	NotificationEvent,
 )
@@ -22,6 +23,13 @@ class FlexibleAssetAdmin(admin.ModelAdmin):
 @admin.register(OperationalSchedule)
 class OperationalScheduleAdmin(admin.ModelAdmin):
 	list_display = ("id", "building", "created_at")
+
+
+@admin.register(CarbonForecast)
+class CarbonForecastAdmin(admin.ModelAdmin):
+	list_display = ("id", "region_id", "forecast_time", "intensity_forecast", "source", "fetched_at")
+	list_filter = ("region_id", "source")
+	search_fields = ("region_id",)
 
 
 @admin.register(CarbonPreference)

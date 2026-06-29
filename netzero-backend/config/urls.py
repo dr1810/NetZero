@@ -21,7 +21,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from api.views import RegisterView
+from api.views import RegisterView, VerifyEmailView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -41,6 +41,7 @@ urlpatterns = [
 
     # Registration endpoint for the frontend
     path("api/auth/register/", RegisterView.as_view(), name="auth_register"),
+    path("api/auth/verify-email/", VerifyEmailView.as_view(), name="auth_verify_email"),
 
     # Existing API
     path("api/", include("api.urls")),

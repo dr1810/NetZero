@@ -4,6 +4,7 @@ from .models import BuildingProfile, FlexibleAsset
 from .models import OperationalSchedule
 from rest_framework import serializers
 from .models import CarbonPreference, NotificationEvent
+from .services.postcode_region import normalize_postcode, validate_postcode_format
 
 class CarbonPreferenceSerializer(serializers.ModelSerializer):
 
@@ -50,10 +51,32 @@ class BuildingProfileSerializer(serializers.ModelSerializer):
         """
         Cleanses and validates UK postcodes to ensure reliable grid zone mapping.
         """
-        clean_pc = value.replace(" ", "").upper()
-        if len(clean_pc) < 5 or len(clean_pc) > 8:
-            raise serializers.ValidationError("Postcode format must adhere to standard UK grid constraints.")
-        return clean_pc
+        normalized = normalize_postcode(value)
+        if not validate_postcode_format(normalized):
+            raise serializers.ValidationError(
+                "Postcode format must adhere to standard UK grid constraints."
+            )
+        return normalized.replace(" ", "")
+
+    def validate(self, data):
+        numeric_fields = [
+            "relative_compactness",
+            "surface_area",
+            "wall_area",
+            "roof_area",
+            "overall_height",
+            "orientation",
+            "glazing_area",
+            "glazing_area_distribution",
+        ]
+        for field in numeric_fields:
+            value = data.get(field)
+            if value is not None and value < 0:
+                raise serializers.ValidationError(
+                    {field: ["Value cannot be negative."]}
+                )
+        return data
+
     def to_internal_value(self, data):
         # Coerce common numeric fields when frontend sends them as strings
         coerced = dict(data)
