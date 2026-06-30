@@ -70,12 +70,32 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    # Production Vercel deployment
+    "https://net-zero-hi5f7xjpt-dr1810s-projects.vercel.app",
+    # Legacy / alternate deployment names
     "https://net-zero-black.vercel.app",
 ]
 
-# Allow Vercel preview deployments
+# Allow all Vercel preview deployments (covers any future deployment URL)
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https://.*\.vercel\.app$",
+    r"^https://net-zero[a-zA-Z0-9\-]*\.vercel\.app$",
+    r"^https://.*-dr1810s-projects\.vercel\.app$",
+]
+
+# Needed so browsers send Authorization headers cross-origin
+CORS_ALLOW_CREDENTIALS = True
+
+# Ensure Authorization and Content-Type are allowed
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 # ------------------------------------------------------------------
@@ -83,6 +103,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 # ------------------------------------------------------------------
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://net-zero-hi5f7xjpt-dr1810s-projects.vercel.app",
     "https://net-zero-black.vercel.app",
     "https://*.vercel.app",
 ]
