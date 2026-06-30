@@ -21,7 +21,7 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-from api.views import RegisterView, VerifyEmailView, DeleteAccountView
+from api.views import RegisterView, VerifyEmailView, DeleteAccountView, AdminDeleteUserView
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -43,6 +43,7 @@ urlpatterns = [
     path("api/auth/register/", RegisterView.as_view(), name="auth_register"),
     path("api/auth/verify-email/", VerifyEmailView.as_view(), name="auth_verify_email"),
     path("api/auth/delete-account/", DeleteAccountView.as_view(), name="auth_delete_account"),
+    path("api/auth/admin/delete-user/", AdminDeleteUserView.as_view(), name="auth_admin_delete_user"),
 
     # Existing API
     path("api/", include("api.urls")),

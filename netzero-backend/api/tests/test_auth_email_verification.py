@@ -130,3 +130,76 @@ class AuthEmailVerificationTests(APITestCase):
         self.assertEqual(response.data["detail"], "Account deleted successfully.")
         self.assertEqual(response.data["deletion_email_sent"], True)
         self.assertFalse(User.objects.filter(id=user.id).exists())
+
+    def test_admin_delete_user_by_email(self):
+        User = get_user_model()
+        admin_user = User.objects.create_superuser(
+            username="admin@example.com",
+            email="admin@example.com",
+            password="admin-pass-123",
+        )
+        target_user = User.objects.create_user(
+            username="target@example.com",
+            email="target@example.com",
+            password="target-pass-123",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=admin_user)
+
+        response = self.client.delete(
+            "/api/auth/admin/delete-user/",
+            {"email": "target@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["detail"], "User deleted successfully.")
+        self.assertEqual(response.data["deleted_user"]["id"], target_user.id)
+        self.assertFalse(User.objects.filter(id=target_user.id).exists())
+
+    def test_admin_delete_user_forbidden_for_non_admin(self):
+        User = get_user_model()
+        regular_user = User.objects.create_user(
+            username="regular@example.com",
+            email="regular@example.com",
+            password="regular-pass-123",
+            is_active=True,
+        )
+        target_user = User.objects.create_user(
+            username="target2@example.com",
+            email="target2@example.com",
+            password="target-pass-456",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=regular_user)
+
+        response = self.client.delete(
+            "/api/auth/admin/delete-user/",
+            {"email": "target2@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(User.objects.filter(id=target_user.id).exists())
+
+    def test_admin_delete_user_rejects_self_delete(self):
+        User = get_user_model()
+        admin_user = User.objects.create_superuser(
+            username="admin2@example.com",
+            email="admin2@example.com",
+            password="admin-pass-456",
+        )
+        self.client.force_authenticate(user=admin_user)
+
+        response = self.client.delete(
+            "/api/auth/admin/delete-user/",
+            {"email": "admin2@example.com"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "Admins cannot delete their own account via this endpoint.",
+        )
+        self.assertTrue(User.objects.filter(id=admin_user.id).exists())

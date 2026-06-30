@@ -8,7 +8,7 @@ from django.db import IntegrityError
 from django.core.validators import MinValueValidator
 from django.utils import timezone
 from ml.predictor import predict_loads
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
 
 from rest_framework import status, viewsets
 from rest_framework.response import Response
@@ -645,6 +645,58 @@ class DeleteAccountView(APIView):
                 "detail": "Account deleted successfully.",
                 "username": username,
                 "deletion_email_sent": deletion_email_sent,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class AdminDeleteUserView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request):
+        User = get_user_model()
+        user_id = request.data.get("user_id") or request.query_params.get("user_id")
+        email = request.data.get("email") or request.query_params.get("email")
+
+        if not user_id and not email:
+            return Response(
+                {"detail": "Provide user_id or email."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        filters = {}
+        if user_id:
+            filters["id"] = user_id
+        if email:
+            filters["email"] = email
+
+        try:
+            target_user = User.objects.get(**filters)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if request.user.id == target_user.id:
+            return Response(
+                {"detail": "Admins cannot delete their own account via this endpoint."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        deleted_user_id = target_user.id
+        deleted_email = target_user.email
+        deleted_username = target_user.username
+        target_user.delete()
+
+        return Response(
+            {
+                "detail": "User deleted successfully.",
+                "deleted_user": {
+                    "id": deleted_user_id,
+                    "username": deleted_username,
+                    "email": deleted_email,
+                },
             },
             status=status.HTTP_200_OK,
         )
