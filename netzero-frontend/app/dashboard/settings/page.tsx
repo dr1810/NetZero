@@ -3,11 +3,18 @@
 
 import React, { useState } from "react";
 import { Bell, ShieldAlert, Globe, Save, CheckCircle2 } from "lucide-react";
-import { fetchBuildings, updateBuilding, BuildingProfile, NewBuildingInput, deleteAccount } from "@/lib/api";
+import {
+  fetchBuildings,
+  updateBuilding,
+  BuildingProfile,
+  NewBuildingInput,
+  deleteAccount,
+  adminDeleteUser,
+} from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPanel() {
-  const { logout } = useAuth();
+  const { logout, userEmail } = useAuth();
   // Local states to mimic interactive dashboard adjustments
   const [backendUrl, setBackendUrl] = useState<string>("http://localhost:8000");
   const [carbonCeiling, setCarbonCeiling] = useState<number>(250);
@@ -20,6 +27,15 @@ export default function SettingsPanel() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deletingAccount, setDeletingAccount] = useState<boolean>(false);
+  const [adminDeleteTargetEmail, setAdminDeleteTargetEmail] = useState<string>("");
+  const [adminDeleteError, setAdminDeleteError] = useState<string | null>(null);
+  const [adminDeleteSuccess, setAdminDeleteSuccess] = useState<string | null>(null);
+  const [adminDeletingUser, setAdminDeletingUser] = useState<boolean>(false);
+
+  const ownerEmail = (process.env.NEXT_PUBLIC_OWNER_EMAIL || "dharun.ramesh2003@gmail.com")
+    .trim()
+    .toLowerCase();
+  const isOwnerUser = ((userEmail || "").trim().toLowerCase() === ownerEmail);
 
   React.useEffect(() => {
     fetchBuildings()
@@ -79,6 +95,34 @@ export default function SettingsPanel() {
       setDeleteError(err instanceof Error ? err.message : "Failed to delete account.");
     } finally {
       setDeletingAccount(false);
+    }
+  };
+
+  const handleAdminDeleteUser = async () => {
+    setAdminDeleteError(null);
+    setAdminDeleteSuccess(null);
+    const email = adminDeleteTargetEmail.trim();
+    if (!email) {
+      setAdminDeleteError("Enter an email to delete.");
+      return;
+    }
+    if (email.toLowerCase() === (userEmail || "").toLowerCase()) {
+      setAdminDeleteError("Use Delete Account to remove your own account.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete user ${email}? This cannot be undone.`);
+    if (!confirmed) return;
+
+    try {
+      setAdminDeletingUser(true);
+      await adminDeleteUser({ email });
+      setAdminDeleteSuccess(`Deleted user: ${email}`);
+      setAdminDeleteTargetEmail("");
+    } catch (err: unknown) {
+      setAdminDeleteError(err instanceof Error ? err.message : "Failed to delete user.");
+    } finally {
+      setAdminDeletingUser(false);
     }
   };
 
@@ -250,8 +294,37 @@ export default function SettingsPanel() {
                   {deleteError}
                 </div>
               )}
+              {adminDeleteError && (
+                <div className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1">
+                  {adminDeleteError}
+                </div>
+              )}
+              {adminDeleteSuccess && (
+                <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-1">
+                  {adminDeleteSuccess}
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2">
+              {isOwnerUser && (
+                <>
+                  <input
+                    type="email"
+                    value={adminDeleteTargetEmail}
+                    onChange={(e) => setAdminDeleteTargetEmail(e.target.value)}
+                    placeholder="user@email.com"
+                    className="w-56 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition-all focus:border-red-500 dark:border-slate-800 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAdminDeleteUser}
+                    disabled={adminDeletingUser}
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-700 px-4 py-2.5 text-sm font-medium text-white shadow hover:bg-red-600 transition-all shrink-0 font-semibold disabled:opacity-60"
+                  >
+                    {adminDeletingUser ? "Deleting User..." : "Admin Delete User"}
+                  </button>
+                </>
+              )}
               <button
                 type="button"
                 onClick={handleDeleteAccount}

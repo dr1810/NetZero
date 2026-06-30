@@ -114,6 +114,40 @@ export const deleteAccount = async () => {
   return bodyJson;
 };
 
+export const adminDeleteUser = async (payload: { email?: string; user_id?: number }) => {
+  const hasEmail = typeof payload.email === "string" && payload.email.trim().length > 0;
+  const hasUserId = typeof payload.user_id === "number" && Number.isFinite(payload.user_id);
+  if (!hasEmail && !hasUserId) {
+    throw new Error("Provide an email or user_id to delete a user.");
+  }
+
+  const res = await authFetch("/auth/admin/delete-user/", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  let bodyText = "";
+  try {
+    bodyText = await res.text();
+  } catch {}
+
+  let bodyJson: Record<string, unknown> | null = null;
+  try {
+    bodyJson = JSON.parse(bodyText || "null");
+  } catch {}
+
+  if (!res.ok) {
+    const message =
+      (isRecord(bodyJson) && typeof bodyJson.detail === "string" && bodyJson.detail) ||
+      bodyText ||
+      `Failed to delete user (${res.status})`;
+    throw new Error(message);
+  }
+
+  return bodyJson;
+};
+
 function getAuthToken() {
   try {
     return localStorage.getItem("netzero_token");
