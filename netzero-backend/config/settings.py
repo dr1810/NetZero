@@ -151,7 +151,18 @@ REST_FRAMEWORK = {
     ),
 }
 
-FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000")
+_frontend_url_default = "http://localhost:3000"
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", _frontend_url_default)
+
+# Warn loudly in production when FRONTEND_BASE_URL has not been overridden.
+if not DEBUG and FRONTEND_BASE_URL == _frontend_url_default:
+    import warnings
+    warnings.warn(
+        "FRONTEND_BASE_URL is not set — email links will point to localhost:3000. "
+        "Set the FRONTEND_BASE_URL environment variable to your Vercel deployment URL.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
 
 # ------------------------------------------------------------------
 # CELERY
