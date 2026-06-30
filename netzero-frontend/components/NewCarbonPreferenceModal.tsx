@@ -2,13 +2,21 @@
 
 import { useState } from "react";
 import { createCarbonPreference } from "@/lib/api";
+import type { BuildingProfile } from "@/lib/api";
+
+interface NewCarbonPreferenceModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  buildings: BuildingProfile[];
+}
 
 export default function NewCarbonPreferenceModal({
   isOpen,
   onClose,
   onSuccess,
   buildings,
-}: any) {
+}: NewCarbonPreferenceModalProps) {
   const [building, setBuilding] = useState("");
   const [threshold, setThreshold] = useState("");
   const [budget, setBudget] = useState("");
@@ -61,7 +69,7 @@ export default function NewCarbonPreferenceModal({
               Select Building
             </option>
 
-            {buildings.map((b: any) => (
+            {buildings.map((b) => (
               <option
                 key={b.id}
                 value={b.id}

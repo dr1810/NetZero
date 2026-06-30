@@ -20,8 +20,9 @@ export default function DashboardOverview() {
       setBuildings(buildingsData);
       setAssets(assetsData);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load orchestration metrics.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load orchestration metrics.";
+      setError(message);
     }
   };
 

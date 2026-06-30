@@ -47,8 +47,9 @@ export default function AnalyticsPage() {
         setBuildings(buildingsData);
         setAssets(assetsData);
         setError(null);
-      } catch (err: any) {
-        setError(err.message || "Failed to stream live telemetry from matrix inventory.");
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "Failed to stream live telemetry from matrix inventory.";
+        setError(message);
       } finally {
         setLoading(false);
       }

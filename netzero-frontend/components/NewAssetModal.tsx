@@ -72,10 +72,11 @@ export default function NewAssetModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.message ||
-          "Failed to register asset."
+        err instanceof Error
+          ? err.message
+          : "Failed to register asset."
       );
     } finally {
       setLoading(false);

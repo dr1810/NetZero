@@ -66,7 +66,7 @@ export default function BuildingProfileForm() {
       <div className="mb-6">
         <h2 className="text-xl font-bold tracking-tight">Thermodynamic Digital Twin Onboarding</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Provide your facility's physical vector metadata to initialize baseline thermal load calculations.
+          Provide your facility&apos;s physical vector metadata to initialize baseline thermal load calculations.
         </p>
       </div>
 

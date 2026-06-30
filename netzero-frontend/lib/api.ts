@@ -50,6 +50,10 @@ export interface NewAssetInput {
     | "SHEDDABLE";
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export const createAsset = async (
   payload: NewAssetInput
 ) => {
@@ -239,7 +243,7 @@ export const createBuildingProfile = async (payload: NewBuildingInput) => {
   });
 
   // Try to read JSON body first, fall back to text
-  let bodyJson: any = null;
+  let bodyJson: Record<string, unknown> | null = null;
   let bodyText = "";
   try {
     const txt = await res.text();
@@ -252,7 +256,15 @@ export const createBuildingProfile = async (payload: NewBuildingInput) => {
   } catch (e) {}
 
   if (!res.ok) {
-    const messageFromBody = (bodyJson && (bodyJson.detail || bodyJson.message)) || (typeof bodyText === 'string' && bodyText.trim() ? bodyText : null);
+    const detailMessage =
+      isRecord(bodyJson) && typeof bodyJson.detail === "string"
+        ? bodyJson.detail
+        : null;
+    const fallbackMessage =
+      isRecord(bodyJson) && typeof bodyJson.message === "string"
+        ? bodyJson.message
+        : null;
+    const messageFromBody = detailMessage || fallbackMessage || (typeof bodyText === "string" && bodyText.trim() ? bodyText : null);
     const payloadToThrow = {
       status: res.status,
       url: res.url,
@@ -315,11 +327,17 @@ export const emailReport = async (id: number) => {
     bodyText = await res.text();
   } catch (e) {}
 
-  let bodyJson: any = null;
+  let bodyJson: Record<string, unknown> | null = null;
   try { bodyJson = JSON.parse(bodyText || "null"); } catch (e) { bodyJson = null; }
 
   if (!res.ok) {
-    const reason = bodyJson?.reason || bodyJson?.detail || bodyText || `Status ${res.status}`;
+    const reasonFromBody =
+      isRecord(bodyJson) && typeof bodyJson.reason === "string"
+        ? bodyJson.reason
+        : isRecord(bodyJson) && typeof bodyJson.detail === "string"
+        ? bodyJson.detail
+        : null;
+    const reason = reasonFromBody || bodyText || `Status ${res.status}`;
     try { showToast(`Report send failed: ${reason}`); } catch (e) {}
     throw new Error(reason);
   }

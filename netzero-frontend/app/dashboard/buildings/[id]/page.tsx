@@ -1,29 +1,37 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useRouter, usePathname, useSearchParams, useParams } from "next/navigation";
-import { fetchBuilding, fetchBuildingSchedule } from "@/lib/api";
-import { Loader2, Calendar, FileText, ArrowLeft } from "lucide-react";
+import { useRouter, useSearchParams, useParams } from "next/navigation";
+import { fetchBuilding, fetchBuildingSchedule, BuildingProfile } from "@/lib/api";
+import { Loader2, Calendar, ArrowLeft } from "lucide-react";
+
+interface BuildingDetailData extends BuildingProfile {
+  predicted_heating_load?: number | null;
+  predicted_cooling_load?: number | null;
+}
+
+interface BuildingSchedule {
+  generated_at: string;
+  predicted_heating_load: number;
+  predicted_cooling_load: number;
+  windows: Record<string, string>;
+}
 
 export default function BuildingDetail() {
   const params = useParams();
+  const searchParams = useSearchParams();
+  const router = useRouter();
   const id = params?.id as string | undefined;
   const numericId = id ? Number(id) : NaN;
-  const [building, setBuilding] = useState<any | null>(null);
-  const [schedule, setSchedule] = useState<any | null>(null);
+  const initialTab = searchParams?.get("tab") === "schedules" ? "schedules" : "overview";
+  const [building, setBuilding] = useState<BuildingDetailData | null>(null);
+  const [schedule, setSchedule] = useState<BuildingSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview'|'schedules'>('overview');
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<"overview" | "schedules">(initialTab);
 
   useEffect(() => {
-    // Respect `?tab=schedules` query param to open schedules tab directly
-    try {
-      const q = searchParams?.get?.('tab');
-      if (q === 'schedules') setTab('schedules');
-    } catch (e) {}
     const load = async () => {
       setLoading(true);
       try {
@@ -108,9 +116,9 @@ export default function BuildingDetail() {
                     setScheduleLoading(true);
                     const s = await fetchBuildingSchedule(numericId);
                     setSchedule(s);
-                  } catch (err: any) {
+                  } catch (err: unknown) {
                     console.error('Failed to generate schedule', err);
-                    setScheduleError(err?.message || 'Failed to generate schedule');
+                    setScheduleError(err instanceof Error ? err.message : "Failed to generate schedule");
                   } finally {
                     setScheduleLoading(false);
                   }
@@ -155,7 +163,7 @@ export default function BuildingDetail() {
             <p className="text-xs text-slate-500">Generating schedule…</p>
           )}
           {!schedule ? (
-            <p className="text-xs text-slate-400">No schedule available. Click "Generate Schedule" to create one.</p>
+            <p className="text-xs text-slate-400">No schedule available. Click &quot;Generate Schedule&quot; to create one.</p>
           ) : (
             <div className="space-y-3">
               <div className="text-xs text-slate-500">Generated at: <span className="font-mono">{new Date(schedule.generated_at).toLocaleString()}</span></div>
@@ -169,7 +177,7 @@ export default function BuildingDetail() {
                       <tr className="text-left text-slate-400"><th className="pr-4">Time Range</th><th>Level</th></tr>
                     </thead>
                     <tbody>
-                      {schedule.windows && Object.entries(schedule.windows).map(([range, level]: any) => (
+                      {schedule.windows && Object.entries(schedule.windows).map(([range, level]) => (
                         <tr key={range} className="border-t border-transparent hover:border-slate-200">
                           <td className="py-1 pr-4 font-mono">{range}</td>
                           <td className="py-1">{level}</td>

@@ -106,7 +106,6 @@ export default function OnboardingGateway() {
       }
 
       const authData = await loginResponse.json();
-      console.log("Auth response (login):", authData);
       login(authData.access || authData.token || authData);
     } catch (err: unknown) {
       setError(

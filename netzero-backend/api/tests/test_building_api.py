@@ -46,3 +46,36 @@ class BuildingProfileAPITest(APITestCase):
             response.status_code,
             status.HTTP_200_OK
         )
+
+    def test_update_building_without_user_email(self):
+        building = BuildingProfile.objects.create(
+            owner=self.user,
+            user_email="test@example.com",
+            postcode="EC1A1BB",
+            relative_compactness=0.8,
+            surface_area=600,
+            wall_area=300,
+            roof_area=200,
+            overall_height=7,
+            orientation=2,
+            glazing_area=0.2,
+            glazing_area_distribution=1,
+        )
+
+        payload = {
+            "postcode": "EC1A1BB",
+            "relative_compactness": 0.82,
+            "surface_area": 610,
+            "wall_area": 302,
+            "roof_area": 202,
+            "overall_height": 7.1,
+            "orientation": 3,
+            "glazing_area": 0.25,
+            "glazing_area_distribution": 2,
+        }
+
+        response = self.client.put(f"/api/buildings/{building.id}/", payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        building.refresh_from_db()
+        self.assertEqual(building.user_email, "test@example.com")

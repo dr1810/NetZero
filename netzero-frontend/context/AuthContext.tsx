@@ -1,13 +1,21 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+
+type LoginPayload =
+  | string
+  | {
+      access?: string;
+      token?: string;
+      refresh?: string;
+    };
 
 interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   // Accept either a raw token string or an auth response object.
-  login: (token: any) => void;
+  login: (token: LoginPayload) => void;
   logout: () => void;
   userEmail?: string | null;
 }
@@ -15,19 +23,24 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem("netzero_token");
+  });
   const router = useRouter();
 
+  const userEmail = useMemo(() => {
+    if (!token) return null;
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1])) as Record<string, string>;
+      return payload.email || payload.username || null;
+    } catch {
+      return null;
+    }
+  }, [token]);
+
   useEffect(() => {
-    // Mount-time verification of local storage for persistence
-    const savedToken = localStorage.getItem("netzero_token");
-    if (savedToken) {
-      setToken(savedToken);
-      try {
-        const payload = JSON.parse(atob(savedToken.split(".")[1]));
-        setUserEmail(payload.email || payload.username || null);
-      } catch (e) {}
+    if (token) {
       return;
     }
 
@@ -49,19 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.setItem("netzero_token", access);
             if (refresh) localStorage.setItem("netzero_refresh", refresh);
             setToken(access);
-            try {
-              const payload = JSON.parse(atob(access.split(".")[1]));
-              setUserEmail(payload.email || payload.username || null);
-            } catch (e) {}
           }
         })
         .catch(() => {
-          try { localStorage.removeItem("netzero_refresh"); } catch (e) {}
+          try { localStorage.removeItem("netzero_refresh"); } catch {}
         });
     }
-  }, []);
+  }, [token]);
 
-  const login = (newToken: any) => {
+  const login = (newToken: LoginPayload) => {
     // Handle passed token shapes: string, { access, refresh }, or { token }
     const tokenToStore = typeof newToken === "string" ? newToken : newToken?.access || newToken?.token || null;
     const refreshToStore = typeof newToken === "object" ? newToken?.refresh || null : null;
@@ -74,12 +83,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("netzero_token", tokenToStore);
     if (refreshToStore) localStorage.setItem("netzero_refresh", refreshToStore);
     setToken(tokenToStore);
-    try {
-      const payload = JSON.parse(atob(tokenToStore.split(".")[1]));
-      setUserEmail(payload.email || payload.username || null);
-    } catch (e) {
-      setUserEmail(null);
-    }
     router.push("/dashboard");
   };
 
@@ -87,7 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("netzero_token");
     localStorage.removeItem("netzero_refresh");
     setToken(null);
-    setUserEmail(null);
     router.push("/");
   };
 

@@ -46,8 +46,9 @@ export default function DashboardPage() {
       setBuildings(buildingsData);
       setAssets(assetsData);
       setError(null);
-    } catch (err: any) {
-      setError(err.message || "Failed to load matrix telemetry inventory.");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load matrix telemetry inventory.";
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -59,8 +60,9 @@ export default function DashboardPage() {
     try {
       await deleteBuilding(id);
       await loadDashboardData(); // Refreshes table after deletion
-    } catch (err: any) {
-      alert("Error deleting building: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      alert("Error deleting building: " + message);
     }
   };
 
@@ -72,20 +74,28 @@ export default function DashboardPage() {
   const handleEmailReport = async (id: number) => {
   try {
     const result = await emailReport(id);
+    const recipient =
+      result && typeof result.recipient === "string"
+        ? result.recipient
+        : "the configured recipient";
 
     alert(
-      `Sustainability report successfully sent to ${result.recipient}`
+      `Sustainability report successfully sent to ${recipient}`
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     alert(
       "Failed to send sustainability report: " +
-      err.message
+      message
     );
   }
 };
 
   useEffect(() => {
-    loadDashboardData();
+    const timer = setTimeout(() => {
+      void loadDashboardData();
+    }, 0);
+    return () => clearTimeout(timer);
   }, []);
 
   // Compute metrics for plots & data representations

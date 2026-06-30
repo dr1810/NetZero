@@ -6,6 +6,7 @@ import csv
 from django.db import models
 from django.db import IntegrityError
 from django.core.validators import MinValueValidator
+from django.utils import timezone
 from ml.predictor import predict_loads
 from rest_framework.permissions import IsAuthenticated
 
@@ -42,6 +43,9 @@ from .services.auth_verification import (
     send_auth_verification_email,
     verify_email_token,
 )
+
+logger = logging.getLogger(__name__)
+
 class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
     serializer_class = CarbonPreferenceSerializer
@@ -153,16 +157,42 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
         )
 
     def update(self, request, *args, **kwargs):
-        response = super().update(request, *args, **kwargs)
-        if response.status_code not in (status.HTTP_200_OK, status.HTTP_202_ACCEPTED):
-            return response
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
 
-        profile_instance = self.get_object()
+        try:
+            data = request.data.copy()
+        except Exception:
+            data = dict(request.data)
+
+        if not data.get("user_email"):
+            if instance.user_email:
+                data["user_email"] = instance.user_email
+            else:
+                user_email_value = getattr(request.user, "email", None)
+                if user_email_value:
+                    data["user_email"] = user_email_value
+
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        if not serializer.is_valid():
+            try:
+                self.logger.warning("BuildingProfile update validation failed: %s", serializer.errors)
+            except Exception:
+                pass
+            return Response(
+                {
+                    "errors": serializer.errors,
+                    "raw_payload": data,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        profile_instance = serializer.save(owner=request.user)
         mapped_region_id = map_postcode_to_region_id(profile_instance.postcode)
         if mapped_region_id and profile_instance.grid_zone_id != mapped_region_id:
             profile_instance.grid_zone_id = mapped_region_id
             profile_instance.save(update_fields=["grid_zone_id"])
-        return response
+        return Response(serializer.data, status=status.HTTP_200_OK)
     @action(detail=True, methods=["get"])
     def generate_report(self, request, pk=None):
 
@@ -573,12 +603,53 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
         
         Returns current carbon intensity for the building's region.
         """
-        from api.services.carbon_monitor import should_trigger_modulation
+        from api.services.carbon_monitor import (
+            should_trigger_modulation,
+            get_current_carbon_intensity,
+        )
         
         try:
             should_modulate, carbon_data = should_trigger_modulation(pk)
             
             if carbon_data is None:
+                building = BuildingProfile.objects.get(id=pk)
+
+                has_preference = hasattr(building, "carbon_preference")
+                automation_enabled = (
+                    has_preference and
+                    building.carbon_preference.automation_enabled
+                )
+                if not has_preference or not automation_enabled or not building.grid_zone_id:
+                    fallback_threshold = (
+                        building.carbon_preference.carbon_intensity_threshold
+                        if has_preference else 300.0
+                    )
+                    current = (
+                        get_current_carbon_intensity(building.grid_zone_id)
+                        if building.grid_zone_id else None
+                    )
+
+                    if current:
+                        return Response({
+                            "current_intensity": current["intensity"],
+                            "threshold": fallback_threshold,
+                            "index": current["index"],
+                            "region_id": current["region_id"],
+                            "timestamp": current["timestamp"],
+                            "source": current["source"],
+                            "should_modulate": False
+                        })
+
+                    return Response({
+                        "current_intensity": 0.0,
+                        "threshold": fallback_threshold,
+                        "index": "unknown",
+                        "region_id": building.grid_zone_id or "UNKNOWN",
+                        "timestamp": timezone.now(),
+                        "source": "unavailable",
+                        "should_modulate": False
+                    })
+
                 return Response(
                     {"error": "Could not fetch carbon intensity data"},
                     status=status.HTTP_503_SERVICE_UNAVAILABLE

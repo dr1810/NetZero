@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +35,6 @@ const pillars = [
 ];
 
 export default function LandingPage() {
-  const [hasMounted, setHasMounted] = useState(false);
   const router = useRouter();
   const { isAuthenticated, userEmail } = useAuth();
 
@@ -46,16 +45,6 @@ export default function LandingPage() {
     if (parts.length === 0) return name.substring(0,2).toUpperCase();
     if (parts.length === 1) return parts[0].substring(0,2).toUpperCase();
     return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-
-  // Force the layout to only render once the client environment is 100% ready
-  useEffect(() => {
-    setHasMounted(true);
-  }, []);
-
-  // Return a clean, empty background container matching your layout theme on the first server pass
-  if (!hasMounted) {
-    return <div className="min-h-screen bg-slate-50" />;
   }
 
   return (
