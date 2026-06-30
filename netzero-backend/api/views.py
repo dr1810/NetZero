@@ -543,17 +543,27 @@ class RegisterView(APIView):
         # Use email as username when appropriate
         username = email if "@" in (email or "") else request.data.get("username", email)
 
-        if User.objects.filter(username=username).exists():
-            return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
-
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            is_active=False,
-            first_name=first_name,
-            last_name=last_name,
-        )
+        existing_user = User.objects.filter(username=username).first()
+        created = False
+        if existing_user:
+            if existing_user.is_active:
+                return Response({"detail": "User already exists."}, status=status.HTTP_400_BAD_REQUEST)
+            existing_user.email = email
+            existing_user.first_name = first_name
+            existing_user.last_name = last_name
+            existing_user.set_password(password)
+            existing_user.save(update_fields=["email", "first_name", "last_name", "password"])
+            user = existing_user
+        else:
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                is_active=False,
+                first_name=first_name,
+                last_name=last_name,
+            )
+            created = True
 
         token = build_email_verification_token(user)
         verification_url = build_verification_url(token)
@@ -565,12 +575,17 @@ class RegisterView(APIView):
         if not sent:
             logger.warning("Verification email not sent for user=%s reason=%s", user.username, reason)
 
+        message = (
+            "Registration successful. Please verify your email before logging in."
+            if created
+            else "Account already exists but is not verified. A new verification email was sent."
+        )
         return Response(
             {
-                "detail": "Registration successful. Please verify your email before logging in.",
+                "detail": message,
                 "verification_email_sent": bool(sent),
             },
-            status=status.HTTP_201_CREATED,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
 

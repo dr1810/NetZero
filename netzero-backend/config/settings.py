@@ -172,6 +172,27 @@ REST_FRAMEWORK = {
     ),
 }
 
+# ------------------------------------------------------------------
+# EMAIL (Gmail SMTP — set EMAIL_HOST_USER and EMAIL_HOST_PASSWORD
+# in Render environment variables)
+# Generate an App Password at: https://myaccount.google.com/apppasswords
+# ------------------------------------------------------------------
+
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = "smtp.gmail.com"
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    f"NetZero <{EMAIL_HOST_USER}>" if EMAIL_HOST_USER else "NetZero <noreply@example.com>",
+)
+
+# Fall back to console backend locally when no credentials are set
+if not EMAIL_HOST_USER:
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
 _frontend_url_default = "http://localhost:3000"
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", _frontend_url_default)
 

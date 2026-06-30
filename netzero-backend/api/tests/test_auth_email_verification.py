@@ -54,6 +54,64 @@ class AuthEmailVerificationTests(APITestCase):
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
 
+    @patch("api.views.send_auth_verification_email")
+    def test_register_resends_for_existing_inactive_user(self, mock_send):
+        mock_send.return_value = (True, None)
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="pending@example.com",
+            email="pending@example.com",
+            password="old-pass",
+            is_active=False,
+            first_name="Old",
+            last_name="Name",
+        )
+
+        response = self.client.post(
+            "/api/auth/register/",
+            {
+                "email": "pending@example.com",
+                "password": "new-pass-123",
+                "first_name": "New",
+                "last_name": "Name",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["verification_email_sent"], True)
+        self.assertIn("not verified", response.data["detail"])
+        user.refresh_from_db()
+        self.assertFalse(user.is_active)
+        self.assertEqual(user.first_name, "New")
+        self.assertTrue(user.check_password("new-pass-123"))
+
+    @patch("api.views.send_auth_verification_email")
+    def test_register_rejects_existing_active_user(self, mock_send):
+        mock_send.return_value = (True, None)
+        User = get_user_model()
+        User.objects.create_user(
+            username="active@example.com",
+            email="active@example.com",
+            password="pass123",
+            is_active=True,
+        )
+
+        response = self.client.post(
+            "/api/auth/register/",
+            {
+                "email": "active@example.com",
+                "password": "new-pass-123",
+                "first_name": "Active",
+                "last_name": "User",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "User already exists.")
+        mock_send.assert_not_called()
+
     @patch("api.views.send_account_deleted_email")
     def test_delete_account_removes_authenticated_user(self, mock_send_deleted_email):
         mock_send_deleted_email.return_value = (True, None)
