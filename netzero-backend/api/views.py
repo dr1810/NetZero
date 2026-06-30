@@ -21,6 +21,7 @@ import logging
 from .models import (
     BuildingProfile,
     FlexibleAsset,
+    ModulationEvent,
     OperationalSchedule,
     CarbonPreference,
 )
@@ -236,7 +237,15 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
         building = self.get_object()
 
         try:
-            schedule = generate_schedule_for_building(building)
+            carbon_weight = float(request.query_params.get("carbon_weight", 0.5))
+            cost_weight = float(request.query_params.get("cost_weight", 0.3))
+            comfort_weight = float(request.query_params.get("comfort_weight", 0.2))
+            schedule = generate_schedule_for_building(
+                building,
+                carbon_weight=carbon_weight,
+                cost_weight=cost_weight,
+                comfort_weight=comfort_weight,
+            )
             return Response(schedule, status=status.HTTP_200_OK)
         except Exception as e:
             self.logger.exception("Error generating schedule for building %s", building.id)
@@ -446,6 +455,8 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
         buildings = BuildingProfile.objects.filter(
             owner=request.user
         )
+        assets = FlexibleAsset.objects.filter(building__owner=request.user)
+        events = ModulationEvent.objects.filter(building__owner=request.user)
 
         total_buildings = buildings.count()
 
@@ -459,18 +470,50 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             for b in buildings
         )
 
-        estimated_carbon_avoided = total_heating * 0.2
-        estimated_cost_savings = total_heating * 0.15
+        total_flexible_capacity_kw = sum(a.electrical_capacity_kw or 0 for a in assets)
+        total_carbon_saved_kg = sum(e.estimated_carbon_saved_kg or 0 for e in events)
+        baseline_emissions_kg = max((total_heating + total_cooling) * 0.23, 0.001)
+        cumulative_carbon_reduction_percent = min((total_carbon_saved_kg / baseline_emissions_kg) * 100, 100.0)
+        estimated_cost_savings = (total_carbon_saved_kg * 1000.0 / 250.0) * 0.25
 
         return Response({
             "total_facilities": total_buildings,
             "total_heating_load": total_heating,
             "total_cooling_load": total_cooling,
-            "estimated_carbon_avoided_kg":
-                estimated_carbon_avoided,
-            "estimated_cost_savings_gbp":
-                estimated_cost_savings
+            "total_flexible_capacity_kw": round(total_flexible_capacity_kw, 3),
+            "cumulative_carbon_reduction_percent": round(cumulative_carbon_reduction_percent, 3),
+            "estimated_carbon_avoided_kg": round(total_carbon_saved_kg, 3),
+            "estimated_cost_savings_gbp": round(estimated_cost_savings, 3),
+            "active_modulations": assets.filter(is_modulated_active=True).count(),
         })
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="centralized-control")
+    def centralized_control(self, request):
+        """
+        Trigger portfolio-wide modulation checks for all buildings owned by the user.
+        Optional body: { "dry_run": true }
+        """
+        from api.services.asset_scheduler import run_carbon_aware_scheduler
+
+        dry_run = bool(request.data.get("dry_run", False))
+        buildings = BuildingProfile.objects.filter(owner=request.user).values_list("id", flat=True)
+
+        results = []
+        total_applied = 0
+        for building_id in buildings:
+            result = run_carbon_aware_scheduler(building_id, dry_run=dry_run)
+            results.append({"building_id": building_id, "result": result})
+            total_applied += int(result.get("applied_count", 0) or 0)
+
+        return Response(
+            {
+                "status": "dry_run" if dry_run else "applied",
+                "buildings_processed": len(results),
+                "total_applied_modulations": total_applied,
+                "results": results,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 class FlexibleAssetViewSet(viewsets.ModelViewSet):
     """

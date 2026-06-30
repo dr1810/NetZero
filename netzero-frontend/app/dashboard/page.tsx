@@ -4,11 +4,14 @@ import React, { useEffect, useState } from "react";
 import {
   fetchBuildings,
   fetchAssets,
+  fetchPortfolioSummary,
   fetchBuildingSchedule,
   deleteBuilding,
   emailReport,
   BuildingProfile,
   AssetProfile,
+  PortfolioSummary,
+  runCentralizedControl,
 } from "@/lib/api";
 import { 
   Building2, 
@@ -31,6 +34,8 @@ export default function DashboardPage() {
   const [assets, setAssets] = useState<AssetProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+  const [centralizedLoading, setCentralizedLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAssetModalOpen, setIsAssetModalOpen] = useState(false);
   const [editingBuilding, setEditingBuilding] = useState<BuildingProfile | null>(null);
@@ -39,12 +44,14 @@ export default function DashboardPage() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [buildingsData, assetsData] = await Promise.all([
+      const [buildingsData, assetsData, portfolioData] = await Promise.all([
         fetchBuildings(),
         fetchAssets(),
+        fetchPortfolioSummary(),
       ]);
       setBuildings(buildingsData);
       setAssets(assetsData);
+      setPortfolioSummary(portfolioData);
       setError(null);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to load matrix telemetry inventory.";
@@ -63,6 +70,24 @@ export default function DashboardPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
       alert("Error deleting building: " + message);
+    }
+  };
+
+  const handleCentralizedControl = async (dryRun: boolean) => {
+    try {
+      setCentralizedLoading(true);
+      const response = await runCentralizedControl(dryRun);
+      alert(
+        `${dryRun ? "Dry-run" : "Live"} centralized control complete.\n` +
+        `Buildings processed: ${response.buildings_processed}\n` +
+        `Total applied modulations: ${response.total_applied_modulations}`
+      );
+      await loadDashboardData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to run centralized control";
+      alert(message);
+    } finally {
+      setCentralizedLoading(false);
     }
   };
 
@@ -162,6 +187,20 @@ export default function DashboardPage() {
           >
             Carbon Limits
           </button>
+          <button
+            onClick={() => handleCentralizedControl(true)}
+            disabled={centralizedLoading}
+            className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            Centralized Dry Run
+          </button>
+          <button
+            onClick={() => handleCentralizedControl(false)}
+            disabled={centralizedLoading}
+            className="flex items-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-60"
+          >
+            Apply Portfolio Control
+          </button>
 
         </div>
       </div>
@@ -188,7 +227,9 @@ export default function DashboardPage() {
           <div className="rounded-lg bg-indigo-500/10 p-3 text-indigo-600"><Zap className="h-5 w-5" /></div>
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Flex Capacity</p>
-            <h3 className="text-xl font-bold text-slate-900 mt-0.5">{totalAssetCapacity.toFixed(1)} kW</h3>
+            <h3 className="text-xl font-bold text-slate-900 mt-0.5">
+              {(portfolioSummary?.total_flexible_capacity_kw ?? totalAssetCapacity).toFixed(1)} kW
+            </h3>
           </div>
         </div>
 
@@ -197,11 +238,20 @@ export default function DashboardPage() {
           <div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Modulating Nodes</p>
             <h3 className="text-xl font-bold text-slate-900 mt-0.5">
-              {activeModulationCount} <span className="text-xs font-normal text-slate-400">/ {assets.length} active</span>
+              {(portfolioSummary?.active_modulations ?? activeModulationCount)} <span className="text-xs font-normal text-slate-400">/ {assets.length} active</span>
             </h3>
           </div>
         </div>
       </div>
+      {portfolioSummary && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-sm text-slate-700">
+          <div className="flex flex-wrap items-center gap-6">
+            <span><strong>Portfolio carbon reduction:</strong> {portfolioSummary.cumulative_carbon_reduction_percent.toFixed(2)}%</span>
+            <span><strong>Estimated carbon avoided:</strong> {portfolioSummary.estimated_carbon_avoided_kg.toFixed(2)} kg</span>
+            <span><strong>Estimated cost savings:</strong> £{portfolioSummary.estimated_cost_savings_gbp.toFixed(2)}</span>
+          </div>
+        </div>
+      )}
       {/* Active Carbon Modulation Events */}
       {activeModulationCount > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">

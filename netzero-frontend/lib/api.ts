@@ -19,6 +19,17 @@ export interface BuildingProfile {
   created_at: string;
 }
 
+export interface PortfolioSummary {
+  total_facilities: number;
+  total_heating_load: number;
+  total_cooling_load: number;
+  total_flexible_capacity_kw: number;
+  cumulative_carbon_reduction_percent: number;
+  estimated_carbon_avoided_kg: number;
+  estimated_cost_savings_gbp: number;
+  active_modulations: number;
+}
+
 export interface NewBuildingInput {
   postcode: string;
   relative_compactness: number;
@@ -346,6 +357,28 @@ export const fetchBuilding = async (id: number) => {
   return res.json();
 };
 
+export const fetchPortfolioSummary = async (): Promise<PortfolioSummary> => {
+  const res = await authFetch("/buildings/portfolio/");
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(err || "Failed to fetch portfolio summary");
+  }
+  return res.json();
+};
+
+export const runCentralizedControl = async (dryRun: boolean = false) => {
+  const res = await authFetch("/buildings/centralized-control/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dry_run: dryRun }),
+  });
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(err || "Failed to run centralized control");
+  }
+  return res.json();
+};
+
 export const emailReport = async (id: number) => {
   const res = await authFetch(`/buildings/${id}/email_report/`, { method: 'POST' });
 
@@ -496,10 +529,18 @@ export async function downloadESGReport(buildingId: number) {
   window.URL.revokeObjectURL(url);
 }
 
-export async function fetchBuildingSchedule(buildingId: number) {
+export async function fetchBuildingSchedule(
+  buildingId: number,
+  weights?: { carbonWeight?: number; costWeight?: number; comfortWeight?: number }
+) {
   const token = getAuthToken();
   if (!token) throw new Error("No access token found. Please sign in.");
-  const res = await authFetch(`/buildings/${buildingId}/schedule/`);
+  const params = new URLSearchParams();
+  if (typeof weights?.carbonWeight === "number") params.set("carbon_weight", String(weights.carbonWeight));
+  if (typeof weights?.costWeight === "number") params.set("cost_weight", String(weights.costWeight));
+  if (typeof weights?.comfortWeight === "number") params.set("comfort_weight", String(weights.comfortWeight));
+  const query = params.toString();
+  const res = await authFetch(`/buildings/${buildingId}/schedule/${query ? `?${query}` : ""}`);
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
