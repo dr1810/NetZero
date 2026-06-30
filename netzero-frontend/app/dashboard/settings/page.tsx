@@ -3,9 +3,11 @@
 
 import React, { useState } from "react";
 import { Bell, ShieldAlert, Globe, Save, CheckCircle2 } from "lucide-react";
-import { fetchBuildings, updateBuilding, BuildingProfile, NewBuildingInput } from "@/lib/api";
+import { fetchBuildings, updateBuilding, BuildingProfile, NewBuildingInput, deleteAccount } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPanel() {
+  const { logout } = useAuth();
   // Local states to mimic interactive dashboard adjustments
   const [backendUrl, setBackendUrl] = useState<string>("http://localhost:8000");
   const [carbonCeiling, setCarbonCeiling] = useState<number>(250);
@@ -16,6 +18,8 @@ export default function SettingsPanel() {
   const [postcode, setPostcode] = useState<string>("");
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState<boolean>(false);
 
   React.useEffect(() => {
     fetchBuildings()
@@ -58,6 +62,24 @@ export default function SettingsPanel() {
     }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000); // Reset success notification state
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError(null);
+    const confirmed = window.confirm(
+      "Are you sure you want to delete your account? This will permanently remove your profile and associated data."
+    );
+    if (!confirmed) return;
+
+    try {
+      setDeletingAccount(true);
+      await deleteAccount();
+      logout();
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete account.");
+    } finally {
+      setDeletingAccount(false);
+    }
   };
 
   return (
@@ -223,14 +245,28 @@ export default function SettingsPanel() {
                   {saveError}
                 </div>
               )}
+              {deleteError && (
+                <div className="text-xs font-semibold text-red-600 dark:text-red-400 mt-1">
+                  {deleteError}
+                </div>
+              )}
             </div>
-            
-            <button
-              type="submit"
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow hover:bg-emerald-500 transition-all shrink-0 font-semibold"
-            >
-              <Save className="h-4 w-4" /> Save System Variables
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-medium text-white shadow hover:bg-red-500 transition-all shrink-0 font-semibold disabled:opacity-60"
+              >
+                {deletingAccount ? "Deleting..." : "Delete Account"}
+              </button>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-medium text-white shadow hover:bg-emerald-500 transition-all shrink-0 font-semibold"
+              >
+                <Save className="h-4 w-4" /> Save System Variables
+              </button>
+            </div>
           </div>
 
         </div>

@@ -28,7 +28,17 @@ def build_verification_url(token: str) -> str:
     return f"{base_url}/login?verify_email=1&{query}"
 
 
-def send_auth_verification_email(email: str, verification_url: str, timeout: int = 10):
+def build_console_url() -> str:
+    base_url = getattr(settings, "FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+    return f"{base_url}/dashboard"
+
+
+def send_auth_verification_email(
+    email: str,
+    verification_url: str,
+    first_name: str,
+    timeout: int = 10,
+):
     api_key = os.environ.get("RESEND_API_KEY")
     if not api_key:
         logger.warning("RESEND_API_KEY not configured; verification email not sent to %s", email)
@@ -46,7 +56,7 @@ def send_auth_verification_email(email: str, verification_url: str, timeout: int
                 "to": [email],
                 "subject": "Verify your NetZero account",
                 "text": (
-                    "Welcome to NetZero.\n\n"
+                    f"Hello {first_name}, welcome to the website and Let's get started: {build_console_url()}\n\n"
                     "Please verify your email to activate your account:\n"
                     f"{verification_url}\n\n"
                     "If you did not request this account, ignore this email."
@@ -59,4 +69,36 @@ def send_auth_verification_email(email: str, verification_url: str, timeout: int
         return False, f"remote_service:{response.status_code}"
     except requests.RequestException as exc:
         logger.exception("Failed sending verification email to %s", email)
+        return False, str(exc)
+
+
+def send_account_deleted_email(email: str, first_name: str, timeout: int = 10):
+    api_key = os.environ.get("RESEND_API_KEY")
+    if not api_key:
+        logger.warning("RESEND_API_KEY not configured; account deletion email not sent to %s", email)
+        return False, "RESEND_API_KEY_NOT_CONFIGURED"
+
+    try:
+        response = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": "NetZero <onboarding@resend.dev>",
+                "to": [email],
+                "subject": "Your NetZero account was deleted",
+                "text": (
+                    f"Hello {first_name}, your NetZero account has been deleted.\n\n"
+                    "If this was not you, please contact support immediately."
+                ),
+            },
+            timeout=timeout,
+        )
+        if response.status_code in [200, 202]:
+            return True, None
+        return False, f"remote_service:{response.status_code}"
+    except requests.RequestException as exc:
+        logger.exception("Failed sending account deletion email to %s", email)
         return False, str(exc)

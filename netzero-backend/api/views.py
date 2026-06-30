@@ -40,6 +40,7 @@ from .services.postcode_region import map_postcode_to_region_id
 from .services.auth_verification import (
     build_email_verification_token,
     build_verification_url,
+    send_account_deleted_email,
     send_auth_verification_email,
     verify_email_token,
 )
@@ -488,8 +489,13 @@ class RegisterView(APIView):
 
         email = request.data.get("email") or request.data.get("username")
         password = request.data.get("password")
-        if not email or not password:
-            return Response({"detail": "email and password required"}, status=status.HTTP_400_BAD_REQUEST)
+        first_name = (request.data.get("first_name") or "").strip()
+        last_name = (request.data.get("last_name") or "").strip()
+        if not email or not password or not first_name or not last_name:
+            return Response(
+                {"detail": "first_name, last_name, email and password are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Use email as username when appropriate
         username = email if "@" in (email or "") else request.data.get("username", email)
@@ -502,11 +508,17 @@ class RegisterView(APIView):
             email=email,
             password=password,
             is_active=False,
+            first_name=first_name,
+            last_name=last_name,
         )
 
         token = build_email_verification_token(user)
         verification_url = build_verification_url(token)
-        sent, reason = send_auth_verification_email(email=user.email, verification_url=verification_url)
+        sent, reason = send_auth_verification_email(
+            email=user.email,
+            verification_url=verification_url,
+            first_name=user.first_name or "there",
+        )
         if not sent:
             logger.warning("Verification email not sent for user=%s reason=%s", user.username, reason)
 
@@ -551,6 +563,30 @@ class VerifyEmailView(APIView):
                 "detail": "Email verified successfully.",
                 "access": str(refresh.access_token),
                 "refresh": str(refresh),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class DeleteAccountView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        user = request.user
+        email = getattr(user, "email", None)
+        first_name = getattr(user, "first_name", None) or "there"
+        username = getattr(user, "username", None)
+        deletion_email_sent = False
+        if email:
+            deletion_email_sent, reason = send_account_deleted_email(email=email, first_name=first_name)
+            if not deletion_email_sent:
+                logger.warning("Account deletion email not sent for user=%s reason=%s", username, reason)
+        user.delete()
+        return Response(
+            {
+                "detail": "Account deleted successfully.",
+                "username": username,
+                "deletion_email_sent": deletion_email_sent,
             },
             status=status.HTTP_200_OK,
         )

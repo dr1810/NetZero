@@ -76,6 +76,33 @@ export const createAsset = async (
   return res.json();
 };
 
+export const deleteAccount = async () => {
+  const res = await authFetch("/auth/delete-account/", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  let bodyText = "";
+  try {
+    bodyText = await res.text();
+  } catch {}
+
+  let bodyJson: Record<string, unknown> | null = null;
+  try {
+    bodyJson = JSON.parse(bodyText || "null");
+  } catch {}
+
+  if (!res.ok) {
+    const message =
+      (isRecord(bodyJson) && typeof bodyJson.detail === "string" && bodyJson.detail) ||
+      bodyText ||
+      `Failed to delete account (${res.status})`;
+    throw new Error(message);
+  }
+
+  return bodyJson;
+};
+
 function getAuthToken() {
   try {
     return localStorage.getItem("netzero_token");

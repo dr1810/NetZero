@@ -41,6 +41,8 @@ export default function OnboardingGateway() {
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     postcode: "EC1A 1BB",
@@ -73,7 +75,12 @@ export default function OnboardingGateway() {
         const regResponse = await fetch(`${baseUrl}/api/auth/register/`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: formData.email, password: formData.password }),
+          body: JSON.stringify({
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            email: formData.email,
+            password: formData.password,
+          }),
         });
 
         if (!regResponse.ok) {
@@ -193,6 +200,34 @@ export default function OnboardingGateway() {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Core Credentials Section */}
             <div className="space-y-4">
+              {isSignUp && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">First Name</label>
+                    <input
+                      required={isSignUp}
+                      type="text"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleInputChange}
+                      placeholder="Alex"
+                      className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 outline-none transition-all focus:border-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Last Name</label>
+                    <input
+                      required={isSignUp}
+                      type="text"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleInputChange}
+                      placeholder="Taylor"
+                      className="w-full text-sm rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3 outline-none transition-all focus:border-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Corporate Email Address</label>
                 <input

@@ -14,13 +14,20 @@ class AuthEmailVerificationTests(APITestCase):
 
         response = self.client.post(
             "/api/auth/register/",
-            {"email": "newuser@example.com", "password": "secure-pass-123"},
+            {
+                "email": "newuser@example.com",
+                "password": "secure-pass-123",
+                "first_name": "Net",
+                "last_name": "Zero",
+            },
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = get_user_model().objects.get(username="newuser@example.com")
         self.assertFalse(user.is_active)
+        self.assertEqual(user.first_name, "Net")
+        self.assertEqual(user.last_name, "Zero")
         self.assertEqual(response.data["verification_email_sent"], True)
 
     @patch("api.views.send_auth_verification_email")
@@ -46,3 +53,22 @@ class AuthEmailVerificationTests(APITestCase):
         self.assertTrue(user.is_active)
         self.assertIn("access", response.data)
         self.assertIn("refresh", response.data)
+
+    @patch("api.views.send_account_deleted_email")
+    def test_delete_account_removes_authenticated_user(self, mock_send_deleted_email):
+        mock_send_deleted_email.return_value = (True, None)
+        User = get_user_model()
+        user = User.objects.create_user(
+            username="delete-me@example.com",
+            email="delete-me@example.com",
+            password="pass123",
+            is_active=True,
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.delete("/api/auth/delete-account/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["detail"], "Account deleted successfully.")
+        self.assertEqual(response.data["deletion_email_sent"], True)
+        self.assertFalse(User.objects.filter(id=user.id).exists())
