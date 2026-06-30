@@ -1,5 +1,6 @@
 import logging
 from dataclasses import dataclass
+from datetime import timedelta, timezone as dt_timezone
 from typing import Dict, Iterable, List, Optional
 
 import requests
@@ -24,8 +25,14 @@ def _fetch_region_forecast_payload(
     timeout: float = 8.0,
     http_client=requests,
 ) -> List[dict]:
-    from_ts = timezone.now().replace(minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%MZ")
-    endpoint = f"https://api.carbonintensity.org.uk/regional/intensity/{from_ts}/fw24h/regionid/{region_id}"
+    from_dt = timezone.now().astimezone(dt_timezone.utc).replace(minute=0, second=0, microsecond=0)
+    to_dt = from_dt + timedelta(hours=24)
+    from_ts = from_dt.strftime("%Y-%m-%dT%H:%MZ")
+    to_ts = to_dt.strftime("%Y-%m-%dT%H:%MZ")
+    endpoint = (
+        "https://api.carbonintensity.org.uk/regional/intensity/"
+        f"{from_ts}/{to_ts}/regionid/{region_id}"
+    )
 
     response = http_client.get(endpoint, timeout=timeout)
     response.raise_for_status()

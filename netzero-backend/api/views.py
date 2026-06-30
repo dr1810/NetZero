@@ -335,8 +335,13 @@ class BuildingProfileViewSet(viewsets.ModelViewSet):
             pass
 
         return Response(
-            {"status": "EMAIL_FAILED", "reason": reason},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            {
+                "status": "EMAIL_NOT_SENT",
+                "reason": reason,
+                "recipient": building.user_email,
+                "building_profile_id": building.id
+            },
+            status=status.HTTP_200_OK
         )
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def analyze_notifications(self, request, pk=None):

@@ -9,6 +9,23 @@ from api.services.forecast_ingestion import ingest_region_forecast
 
 
 class ForecastIngestionTests(TestCase):
+    def test_ingestion_uses_iso8601_range_endpoint(self):
+        mock_client = Mock()
+        mock_response = Mock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {"data": [{"data": []}]}
+        mock_client.get.return_value = mock_response
+
+        ingest_region_forecast(region_id="13", http_client=mock_client)
+
+        called_url = mock_client.get.call_args.args[0]
+        self.assertIn("/regional/intensity/", called_url)
+        self.assertIn("/regionid/13", called_url)
+        self.assertRegex(
+            called_url,
+            r"/regional/intensity/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}Z/regionid/13$",
+        )
+
     def test_ingestion_parses_and_stores_forecast_points(self):
         mock_client = Mock()
         mock_response = Mock()

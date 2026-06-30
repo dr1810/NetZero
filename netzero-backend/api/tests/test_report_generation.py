@@ -1,5 +1,6 @@
 from rest_framework.test import APITestCase
 from django.contrib.auth.models import User
+from unittest.mock import patch
 
 from api.models import BuildingProfile
 
@@ -46,3 +47,15 @@ class ReportGenerationTests(APITestCase):
             response["Content-Type"],
             "text/csv"
         )
+
+    @patch("api.views.send_sustainability_report")
+    def test_email_report_returns_200_when_delivery_fails(self, mock_send):
+        mock_send.return_value = (False, "RESEND_API_KEY_NOT_CONFIGURED")
+
+        response = self.client.post(
+            f"/api/buildings/{self.building.id}/email_report/"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["status"], "EMAIL_NOT_SENT")
+        self.assertEqual(response.data["reason"], "RESEND_API_KEY_NOT_CONFIGURED")

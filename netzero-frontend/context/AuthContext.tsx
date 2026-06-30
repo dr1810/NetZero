@@ -23,10 +23,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("netzero_token");
-  });
+  const [token, setToken] = useState<string | null>(null);
   const router = useRouter();
 
   const userEmail = useMemo(() => {
@@ -40,13 +37,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [token]);
 
   useEffect(() => {
-    if (token) {
-      return;
-    }
+    if (token) return;
 
-    // If no access token but a refresh token exists, try to refresh on mount
-    const savedRefresh = localStorage.getItem("netzero_refresh");
-    if (savedRefresh) {
+    const timer = setTimeout(() => {
+      const savedToken = localStorage.getItem("netzero_token");
+      if (savedToken) {
+        setToken(savedToken);
+        return;
+      }
+
+      // If no access token but a refresh token exists, try to refresh on mount
+      const savedRefresh = localStorage.getItem("netzero_refresh");
+      if (!savedRefresh) return;
+
       const rawBase = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
       const baseUrl = rawBase.replace(/\/+$|\/api$/i, "");
       fetch(`${baseUrl}/api/token/refresh/`, {
@@ -67,7 +70,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .catch(() => {
           try { localStorage.removeItem("netzero_refresh"); } catch {}
         });
-    }
+    }, 0);
+    return () => clearTimeout(timer);
   }, [token]);
 
   const login = (newToken: LoginPayload) => {

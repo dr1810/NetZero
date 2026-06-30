@@ -342,6 +342,19 @@ export const emailReport = async (id: number) => {
     throw new Error(reason);
   }
 
+  if (
+    isRecord(bodyJson) &&
+    typeof bodyJson.status === "string" &&
+    bodyJson.status === "EMAIL_NOT_SENT"
+  ) {
+    const reason =
+      typeof bodyJson.reason === "string"
+        ? bodyJson.reason
+        : "Email delivery is not configured.";
+    try { showToast(`Report send failed: ${reason}`); } catch (e) {}
+    throw new Error(reason);
+  }
+
   return bodyJson;
 };
 
@@ -357,7 +370,7 @@ export async function createCarbonPreference(
   payload: CarbonPreference
 ) {
   const response = await fetch(
-    buildUrl("/carbon-preferences/"),
+    buildUrl("/preferences/"),
     {
       method: "POST",
       headers: {
@@ -380,7 +393,7 @@ export async function updateCarbonPreference(
   payload: CarbonPreference
 ) {
   const response = await fetch(
-    buildUrl(`/carbon-preferences/${id}/`),
+    buildUrl(`/preferences/${id}/`),
     {
       method: "PUT",
       headers: {
