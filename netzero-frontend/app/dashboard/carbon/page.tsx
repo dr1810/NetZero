@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { Suspense, useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   fetchBuildings,
@@ -40,7 +40,7 @@ function carbonDebug(message: string, payload?: unknown) {
   console.debug(message, payload);
 }
 
-export default function CarbonMonitoringPage() {
+function CarbonMonitoringPageContent() {
   const searchParams = useSearchParams();
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<number | null>(null);
@@ -678,5 +678,19 @@ export default function CarbonMonitoringPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CarbonMonitoringPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        </div>
+      }
+    >
+      <CarbonMonitoringPageContent />
+    </Suspense>
   );
 }

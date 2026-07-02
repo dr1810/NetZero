@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams, useParams } from "next/navigation";
 import { fetchBuilding, fetchBuildingSchedule, BuildingProfile } from "@/lib/api";
 import { Loader2, Calendar, ArrowLeft } from "lucide-react";
@@ -17,7 +17,7 @@ interface BuildingSchedule {
   windows: Record<string, string>;
 }
 
-export default function BuildingDetail() {
+function BuildingDetailContent() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -218,5 +218,19 @@ export default function BuildingDetail() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function BuildingDetail() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+        </div>
+      }
+    >
+      <BuildingDetailContent />
+    </Suspense>
   );
 }
