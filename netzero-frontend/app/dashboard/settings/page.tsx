@@ -2,12 +2,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Bell, ShieldAlert, Globe, Save, CheckCircle2 } from "lucide-react";
+import { Bell, ShieldAlert, Save, CheckCircle2 } from "lucide-react";
 import {
-  fetchBuildings,
-  updateBuilding,
-  BuildingProfile,
-  NewBuildingInput,
   deleteAccount,
   adminDeleteUser,
 } from "@/lib/api";
@@ -16,13 +12,9 @@ import { useAuth } from "@/context/AuthContext";
 export default function SettingsPanel() {
   const { logout, userEmail } = useAuth();
   // Local states to mimic interactive dashboard adjustments
-  const [backendUrl, setBackendUrl] = useState<string>("http://localhost:8000");
   const [carbonCeiling, setCarbonCeiling] = useState<number>(250);
   const [smsAlerts, setSmsAlerts] = useState<boolean>(true);
   const [emailAlerts, setEmailAlerts] = useState<boolean>(false);
-  const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
-  const [selectedBuildingId, setSelectedBuildingId] = useState<number | null>(null);
-  const [postcode, setPostcode] = useState<string>("");
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -37,45 +29,9 @@ export default function SettingsPanel() {
     .toLowerCase();
   const isOwnerUser = ((userEmail || "").trim().toLowerCase() === ownerEmail);
 
-  React.useEffect(() => {
-    fetchBuildings()
-      .then((rows) => {
-        setBuildings(rows);
-        if (rows.length > 0) {
-          setSelectedBuildingId(rows[0].id);
-          setPostcode(rows[0].postcode || "");
-        }
-      })
-      .catch(() => {
-        setSaveError("Failed to load building profiles.");
-      });
-  }, []);
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveError(null);
-    if (selectedBuildingId) {
-      const selected = buildings.find((b) => b.id === selectedBuildingId);
-      if (selected) {
-        const payload: NewBuildingInput = {
-          postcode,
-          relative_compactness: selected.relative_compactness,
-          surface_area: selected.surface_area,
-          wall_area: selected.wall_area,
-          roof_area: selected.roof_area,
-          overall_height: selected.overall_height,
-          orientation: selected.orientation,
-          glazing_area: selected.glazing_area,
-          glazing_area_distribution: selected.glazing_area_distribution,
-        };
-        try {
-          await updateBuilding(selectedBuildingId, payload);
-        } catch (err: unknown) {
-          setSaveError(err instanceof Error ? err.message : "Failed to save postcode.");
-          return;
-        }
-      }
-    }
     setIsSaved(true);
     setTimeout(() => setIsSaved(false), 3000); // Reset success notification state
   };
@@ -140,66 +96,6 @@ export default function SettingsPanel() {
         
         {/* Left Column: API & Grid Threshold Modulations */}
         <div className="space-y-6">
-          
-          {/* Section A: API Core Gateway Bridging */}
-          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-2 pb-4 border-b border-slate-100 dark:border-slate-800">
-              <Globe className="h-5 w-5 text-emerald-500" />
-              <h3 className="font-bold text-lg tracking-tight">API Infrastructure Routing</h3>
-            </div>
-            
-            <div className="space-y-4 mt-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Django Core REST Endpoint
-                </label>
-                <input
-                  type="text"
-                  value={backendUrl}
-                  onChange={(e) => setBackendUrl(e.target.value)}
-                  className="w-full font-mono text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 outline-none transition-all focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
-                />
-                <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
-                  Points the frontend route controllers toward your running server engine. Use localhost for debugging and swap out for your cloud API URL during staging.
-                </p>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-                  Regional Scope Postcode
-                </label>
-                <div className="grid gap-2">
-                  <select
-                    value={selectedBuildingId ?? ""}
-                    onChange={(e) => {
-                      const id = Number(e.target.value);
-                      setSelectedBuildingId(id);
-                      const selected = buildings.find((building) => building.id === id);
-                      if (selected) {
-                        setPostcode(selected.postcode || "");
-                      }
-                    }}
-                    className="w-full text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 outline-none transition-all focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
-                  >
-                    {buildings.map((building) => (
-                      <option key={building.id} value={building.id}>
-                        Building #{building.id}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={postcode}
-                    onChange={(e) => setPostcode(e.target.value)}
-                    placeholder="e.g., SW1A 1AA"
-                    className="w-full font-mono text-sm rounded-lg border border-slate-200 bg-white px-3 py-2 outline-none transition-all focus:border-emerald-500 dark:border-slate-800 dark:bg-slate-950 text-slate-700 dark:text-slate-300"
-                  />
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1.5 leading-normal">
-                  This postcode is validated and mapped to the National Grid ESO regional zone.
-                </p>
-              </div>
-            </div>
-          </div>
 
           {/* Section B: Automated Modulation Toggles */}
           <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
