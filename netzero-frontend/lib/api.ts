@@ -633,6 +633,15 @@ export interface TriggerModulationResponse {
   }>;
 }
 
+export interface SetAssetModulationResponse {
+  status: 'success' | 'no_change' | 'error';
+  asset_id: number;
+  is_modulated_active: boolean;
+  action_type?: string;
+  trigger_type?: 'MANUAL';
+  detail?: string;
+}
+
 /**
  * Get current carbon intensity for a building
  */
@@ -685,5 +694,26 @@ export async function triggerModulation(
     throw new Error(body || `Failed to trigger modulation: ${res.status}`);
   }
   
+  return res.json();
+}
+
+/**
+ * Manually set modulation state for a single asset
+ */
+export async function setAssetModulation(
+  assetId: number,
+  active: boolean
+): Promise<SetAssetModulationResponse> {
+  const res = await authFetch(`/assets/${assetId}/set-modulation/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ active }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(body || `Failed to update asset modulation state: ${res.status}`);
+  }
+
   return res.json();
 }

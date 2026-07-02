@@ -14,6 +14,7 @@ from rest_framework import status, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
+from rest_framework.exceptions import PermissionDenied
 from django.contrib.auth import get_user_model
 import logging
 
@@ -516,6 +517,119 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
     """
     queryset = FlexibleAsset.objects.all()
     serializer_class = FlexibleAssetSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return FlexibleAsset.objects.filter(building__owner=self.request.user)
+        return FlexibleAsset.objects.none()
+
+    def perform_create(self, serializer):
+        building = serializer.validated_data.get("building")
+        if not building or building.owner_id != self.request.user.id:
+            raise PermissionDenied("You can only register assets for your own buildings.")
+        serializer.save()
+
+    @action(detail=True, methods=["post"], url_path="set-modulation")
+    def set_modulation(self, request, pk=None):
+        """Manually set modulation state for a single asset and log an event."""
+        from api.models import ModulationEvent
+        from api.services.carbon_monitor import get_current_carbon_intensity
+
+        asset = self.get_object()
+        active = request.data.get("active", None)
+        if active is None:
+            return Response(
+                {"error": "active is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if isinstance(active, bool):
+            target_state = active
+        elif isinstance(active, str):
+            normalized = active.strip().lower()
+            if normalized in {"true", "1", "yes", "on"}:
+                target_state = True
+            elif normalized in {"false", "0", "no", "off"}:
+                target_state = False
+            else:
+                return Response(
+                    {"error": "active must be a boolean"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        else:
+            return Response(
+                {"error": "active must be a boolean"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        previous_state = asset.is_modulated_active
+        if previous_state == target_state:
+            return Response(
+                {
+                    "status": "no_change",
+                    "asset_id": asset.id,
+                    "is_modulated_active": asset.is_modulated_active,
+                    "detail": "Asset modulation state is already set.",
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        building = asset.building
+        threshold = (
+            building.carbon_preference.carbon_intensity_threshold
+            if hasattr(building, "carbon_preference")
+            else 300.0
+        )
+
+        intensity = 0.0
+        if building.grid_zone_id:
+            current = get_current_carbon_intensity(building.grid_zone_id)
+            if current:
+                intensity = float(current.get("intensity") or 0.0)
+
+        if target_state:
+            if asset.criticality_classification == "SHEDDABLE":
+                action_type = "SHUTDOWN"
+            elif asset.criticality_classification == "FLEXIBLE":
+                action_type = "DELAYED"
+            else:
+                action_type = "REDUCED"
+            reason = "Manual user modulation enabled for this asset."
+            estimated_saved = round((asset.electrical_capacity_kw or 0.0) * max(intensity, 0.0) * 0.5 / 1000.0, 3)
+        else:
+            action_type = "RESTORED"
+            reason = "Manual user restore requested for this asset."
+            estimated_saved = None
+
+        asset.is_modulated_active = target_state
+        asset.save(update_fields=["is_modulated_active"])
+
+        initiated_by = request.user.email or request.user.username or "system"
+        ModulationEvent.objects.create(
+            asset=asset,
+            building=building,
+            action_type=action_type,
+            trigger_type="MANUAL",
+            carbon_intensity_at_time=float(intensity),
+            carbon_threshold=float(threshold),
+            previous_state=previous_state,
+            new_state=target_state,
+            reason=reason,
+            estimated_carbon_saved_kg=estimated_saved,
+            initiated_by=initiated_by,
+        )
+
+        return Response(
+            {
+                "status": "success",
+                "asset_id": asset.id,
+                "is_modulated_active": asset.is_modulated_active,
+                "action_type": action_type,
+                "trigger_type": "MANUAL",
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class RegisterView(APIView):
@@ -788,7 +902,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
         from rest_framework.pagination import PageNumberPagination
         
         try:
-            building = BuildingProfile.objects.get(id=pk)
+            building = BuildingProfile.objects.get(id=pk, owner=request.user)
             
             queryset = ModulationEvent.objects.filter(building=building).select_related('asset')
             
@@ -846,18 +960,106 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
         """
         POST /api/buildings/{id}/trigger-modulation/
         
-        Manually trigger carbon-aware modulation check for a building.
-        Optional body: { "dry_run": true }
+        Manually trigger carbon-aware modulation for registered assets in a building.
+        Optional body: { "dry_run": true, "threshold": 300 }
         """
-        from api.services.asset_scheduler import run_carbon_aware_scheduler
+        from api.services.asset_scheduler import (
+            evaluate_building_modulation,
+            apply_modulation_decisions,
+        )
+        from api.services.carbon_monitor import get_current_carbon_intensity
         
         try:
-            building = BuildingProfile.objects.get(id=pk)
-            dry_run = request.data.get('dry_run', False)
-            
-            result = run_carbon_aware_scheduler(building.id, dry_run=dry_run)
-            
-            return Response(result, status=status.HTTP_200_OK)
+            building = BuildingProfile.objects.get(id=pk, owner=request.user)
+            dry_run = bool(request.data.get("dry_run", False))
+
+            threshold_raw = request.data.get("threshold")
+            if threshold_raw in [None, ""]:
+                threshold = (
+                    building.carbon_preference.carbon_intensity_threshold
+                    if hasattr(building, "carbon_preference")
+                    else 300.0
+                )
+            else:
+                try:
+                    threshold = float(threshold_raw)
+                except (TypeError, ValueError):
+                    return Response(
+                        {"error": "threshold must be a valid number"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+            if threshold < 0:
+                return Response(
+                    {"error": "threshold must be non-negative"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if not building.grid_zone_id:
+                return Response(
+                    {"error": "Building grid zone is missing; cannot evaluate carbon intensity"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            current = get_current_carbon_intensity(building.grid_zone_id)
+            if not current:
+                return Response(
+                    {"error": "Could not fetch carbon intensity data"},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            carbon_data = {
+                "current_intensity": current["intensity"],
+                "threshold": threshold,
+                "index": current["index"],
+                "region_id": current["region_id"],
+                "timestamp": current["timestamp"],
+                "source": current["source"],
+            }
+
+            decisions = evaluate_building_modulation(building.id, carbon_data, dry_run=dry_run)
+            decisions_payload = [
+                {
+                    "asset_id": d.asset_id,
+                    "asset_name": d.asset_name,
+                    "action": d.action,
+                    "current_state": d.previous_state,
+                    "new_state": d.new_state,
+                    "estimated_carbon_saved": d.estimated_carbon_saved,
+                }
+                for d in decisions
+            ]
+
+            if dry_run:
+                return Response(
+                    {
+                        "status": "dry_run",
+                        "carbon_data": carbon_data,
+                        "decisions": decisions_payload,
+                        "applied_count": 0,
+                    },
+                    status=status.HTTP_200_OK,
+                )
+
+            initiated_by = request.user.email or request.user.username or "system"
+            applied_count = apply_modulation_decisions(
+                building.id,
+                decisions,
+                carbon_data,
+                trigger_type="MANUAL",
+                initiated_by=initiated_by,
+            )
+
+            return Response(
+                {
+                    "status": "success",
+                    "carbon_data": carbon_data,
+                    "decisions": decisions_payload,
+                    "decisions_count": len(decisions_payload),
+                    "applied_count": applied_count,
+                },
+                status=status.HTTP_200_OK,
+            )
             
         except BuildingProfile.DoesNotExist:
             return Response(

@@ -6,6 +6,7 @@ import {
   getCarbonIntensity,
   getModulationEvents,
   triggerModulation,
+  setAssetModulation,
   fetchAssets,
   BuildingProfile,
   AssetProfile,
@@ -35,6 +36,7 @@ export default function CarbonMonitoringPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
+  const [assetActionId, setAssetActionId] = useState<number | null>(null);
   const [dryRunResult, setDryRunResult] = useState<TriggerModulationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -112,6 +114,19 @@ export default function CarbonMonitoringPage() {
       setError(message);
     } finally {
       setTriggerLoading(false);
+    }
+  };
+
+  const handleSetAssetModulation = async (assetId: number, nextState: boolean) => {
+    try {
+      setAssetActionId(assetId);
+      await setAssetModulation(assetId, nextState);
+      await loadCarbonData();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to update asset modulation state';
+      setError(message);
+    } finally {
+      setAssetActionId(null);
     }
   };
 
@@ -344,6 +359,64 @@ export default function CarbonMonitoringPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Registered Assets */}
+      <div className="mb-6 bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+          <Zap className="w-5 h-5" />
+          Registered Assets
+        </h2>
+
+        {assets.length === 0 ? (
+          <p className="text-gray-500 text-center py-4">
+            No assets registered for this building
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {assets.map((asset) => {
+              const isBusy = assetActionId === asset.id;
+              return (
+                <div
+                  key={asset.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg"
+                >
+                  <div>
+                    <div className="font-medium">{asset.name}</div>
+                    <div className="text-sm text-gray-600">
+                      {asset.electrical_capacity_kw} kW • {asset.criticality_classification}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full ${
+                        asset.is_modulated_active
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-green-100 text-green-800"
+                      }`}
+                    >
+                      {asset.is_modulated_active ? "Modulated" : "Normal"}
+                    </span>
+                    <button
+                      onClick={() =>
+                        handleSetAssetModulation(asset.id, !asset.is_modulated_active)
+                      }
+                      disabled={isBusy}
+                      className={`inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg disabled:opacity-60 ${
+                        asset.is_modulated_active
+                          ? "bg-green-600 text-white hover:bg-green-700"
+                          : "bg-orange-600 text-white hover:bg-orange-700"
+                      }`}
+                    >
+                      {isBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {asset.is_modulated_active ? "Restore" : "Modulate"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
