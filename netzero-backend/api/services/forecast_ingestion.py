@@ -37,11 +37,58 @@ def _fetch_region_forecast_payload(
     response = http_client.get(endpoint, timeout=timeout)
     response.raise_for_status()
     payload = response.json()
+    print("FORECAST RAW RESPONSE:", payload)
 
-    data = payload.get("data") or []
-    if not data:
+    def _is_forecast_point_list(value) -> bool:
+        if not isinstance(value, list) or not value:
+            return False
+        if not isinstance(value[0], dict):
+            return False
+        return "from" in value[0] and "intensity" in value[0]
+
+    def _extract_points(value) -> List[dict]:
+        # Case 1: {"data": [...points...]}
+        if isinstance(value, dict):
+            data = value.get("data")
+            if _is_forecast_point_list(data):
+                return data
+
+            # Case 2: {"data": [{"data": [...points...]}]}
+            if isinstance(data, list):
+                for item in data:
+                    if isinstance(item, dict):
+                        nested = item.get("data")
+                        if _is_forecast_point_list(nested):
+                            return nested
+                        # Case 3: {"data": {"data": [...points...]}}
+                        if isinstance(nested, dict):
+                            deeper = nested.get("data")
+                            if _is_forecast_point_list(deeper):
+                                return deeper
+
+            # Case 3: {"data": {"data": [...points...]}}
+            if isinstance(data, dict):
+                nested = data.get("data")
+                if _is_forecast_point_list(nested):
+                    return nested
+
+        # Additional guard: payload itself could be a list wrapper.
+        if isinstance(value, list):
+            if _is_forecast_point_list(value):
+                return value
+            for item in value:
+                if isinstance(item, dict):
+                    nested = item.get("data")
+                    if _is_forecast_point_list(nested):
+                        return nested
+                    if isinstance(nested, dict):
+                        deeper = nested.get("data")
+                        if _is_forecast_point_list(deeper):
+                            return deeper
+
         return []
-    return data[0].get("data") or []
+
+    return _extract_points(payload)
 
 
 def _store_forecast_points(region_id: str, points: Iterable[dict], source: str) -> int:
