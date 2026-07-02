@@ -15,7 +15,6 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.tokens import RefreshToken
 import logging
 
 from .models import (
@@ -39,11 +38,7 @@ from .services.email_dispatcher import send_sustainability_report
 from .services.notification_service import analyze_forecast_and_notify
 from .services.postcode_region import map_postcode_to_region_id
 from .services.auth_verification import (
-    build_email_verification_token,
-    build_verification_url,
     send_account_deleted_email,
-    send_auth_verification_email,
-    verify_email_token,
 )
 
 logger = logging.getLogger(__name__)
@@ -524,7 +519,7 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
 
 
 class RegisterView(APIView):
-    """Registration endpoint that creates an inactive user and emails verification link."""
+    """Registration endpoint for simple email/password auth."""
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -551,78 +546,31 @@ class RegisterView(APIView):
             existing_user.email = email
             existing_user.first_name = first_name
             existing_user.last_name = last_name
+            existing_user.is_active = True
             existing_user.set_password(password)
-            existing_user.save(update_fields=["email", "first_name", "last_name", "password"])
+            existing_user.save(update_fields=["email", "first_name", "last_name", "is_active", "password"])
             user = existing_user
         else:
             user = User.objects.create_user(
                 username=username,
                 email=email,
                 password=password,
-                is_active=False,
+                is_active=True,
                 first_name=first_name,
                 last_name=last_name,
             )
             created = True
-
-        token = build_email_verification_token(user)
-        verification_url = build_verification_url(token)
-        sent, reason = send_auth_verification_email(
-            email=user.email,
-            verification_url=verification_url,
-            first_name=user.first_name or "there",
-        )
-        if not sent:
-            logger.warning("Verification email not sent for user=%s reason=%s", user.username, reason)
-
         message = (
-            "Registration successful. Please verify your email before logging in."
+            "Account created successfully. You can now sign in."
             if created
-            else "Account already exists but is not verified. A new verification email was sent."
+            else "Account updated successfully. You can now sign in."
         )
         return Response(
             {
                 "detail": message,
-                "verification_email_sent": bool(sent),
+                "account_created": bool(created),
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
-
-
-class VerifyEmailView(APIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        token = request.data.get("token")
-        if not token:
-            return Response({"detail": "token is required"}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            payload = verify_email_token(token)
-        except Exception:
-            return Response({"detail": "Invalid or expired token"}, status=status.HTTP_400_BAD_REQUEST)
-
-        User = get_user_model()
-        user_id = payload.get("user_id")
-        email = payload.get("email")
-
-        try:
-            user = User.objects.get(id=user_id, email=email)
-        except User.DoesNotExist:
-            return Response({"detail": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        if not user.is_active:
-            user.is_active = True
-            user.save(update_fields=["is_active"])
-
-        refresh = RefreshToken.for_user(user)
-        return Response(
-            {
-                "detail": "Email verified successfully.",
-                "access": str(refresh.access_token),
-                "refresh": str(refresh),
-            },
-            status=status.HTTP_200_OK,
         )
 
 

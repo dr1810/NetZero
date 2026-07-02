@@ -12,6 +12,7 @@ dj-database-url==3.0.1
 psycopg2-binary==2.9.12
 scikit-learn==1.6.1
 requests==2.32.5
+boto3==1.39.4
 celery==5.4.0
 redis==5.2.1
 
