@@ -1031,20 +1031,24 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 )
 
             current = get_current_carbon_intensity(building.grid_zone_id)
-            if not current:
-                return Response(
-                    {"error": "Could not fetch carbon intensity data"},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
-                )
-
-            carbon_data = {
-                "current_intensity": current["intensity"],
-                "threshold": threshold,
-                "index": current["index"],
-                "region_id": current["region_id"],
-                "timestamp": current["timestamp"],
-                "source": current["source"],
-            }
+            if current:
+                carbon_data = {
+                    "current_intensity": current["intensity"],
+                    "threshold": threshold,
+                    "index": current["index"],
+                    "region_id": current["region_id"],
+                    "timestamp": current["timestamp"],
+                    "source": current["source"],
+                }
+            else:
+                carbon_data = {
+                    "current_intensity": 0.0,
+                    "threshold": threshold,
+                    "index": "unknown",
+                    "region_id": building.grid_zone_id,
+                    "timestamp": timezone.now(),
+                    "source": "unavailable",
+                }
 
             decisions = evaluate_building_modulation(building.id, carbon_data, dry_run=dry_run)
             decisions_payload = [

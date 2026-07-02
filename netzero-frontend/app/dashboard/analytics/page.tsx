@@ -169,13 +169,13 @@ export default function AnalyticsPage() {
             <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating calculated building structural baseline loads from live twin vectors.</p>
           </div>
           
-          <div className="w-full min-w-0 h-[320px] pr-4 text-xs font-mono">
+          <div className="w-full min-w-0 h-[320px] text-xs font-mono">
             {buildings.length === 0 ? (
               <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
                 No active digital twin configurations discovered to plot line analytics.
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={240}>
                 <LineChart data={structuralMatrixData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" stroke="#94a3b8" />
@@ -197,13 +197,13 @@ export default function AnalyticsPage() {
             <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating localized flexible registry capacity thresholds from hardware records.</p>
           </div>
 
-          <div className="w-full min-w-0 h-[320px] pr-4 text-xs font-mono">
+          <div className="w-full min-w-0 h-[320px] text-xs font-mono">
             {assets.length === 0 ? (
               <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
                 Awaiting active modular edge assets to generate calibration charts.
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={240}>
                 <BarChart data={assetCapacityMatrixData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                   <XAxis dataKey="name" stroke="#94a3b8" />

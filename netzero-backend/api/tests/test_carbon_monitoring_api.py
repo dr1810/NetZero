@@ -182,3 +182,28 @@ class CarbonMonitoringAPITest(APITestCase):
         self.assertEqual(response.data["source"], "unavailable")
         self.assertEqual(response.data["should_modulate"], False)
         self.assertEqual(response.data["threshold"], 250)
+
+    @patch("api.services.carbon_monitor.get_current_carbon_intensity")
+    def test_trigger_modulation_returns_fallback_when_upstream_unavailable(self, mock_current):
+        self.building.grid_zone_id = "1"
+        self.building.save(update_fields=["grid_zone_id"])
+        asset = FlexibleAsset.objects.create(
+            building=self.building,
+            name="EV Charger",
+            electrical_capacity_kw=7.2,
+            criticality_classification="FLEXIBLE",
+            is_modulated_active=False,
+        )
+        mock_current.return_value = None
+
+        response = self.client.post(
+            f"/api/buildings/{self.building.id}/trigger-modulation/",
+            {"dry_run": True},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], "dry_run")
+        self.assertEqual(response.data["carbon_data"]["source"], "unavailable")
+        self.assertIn("decisions", response.data)
+        self.assertEqual(response.data["decisions"], [])
