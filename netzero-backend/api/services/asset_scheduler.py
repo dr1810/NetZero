@@ -101,20 +101,25 @@ def _evaluate_asset(
     current_state = asset.is_modulated_active
     criticality = asset.criticality_classification
     
-    # CRITICAL assets are never modulated automatically
-    if criticality == "CRITICAL":
-        return None
-    
     # Decide new state based on carbon intensity
     if should_modulate:
+        # CRITICAL assets are never modulated automatically.
+        if criticality == "CRITICAL":
+            return None
+
         # Carbon is high - activate modulation if not already active
         if not current_state:
-            action = _determine_action_type(criticality)
+            strategy = _resolve_modulation_strategy(asset)
+            action = strategy["action"]
             reason = (
                 f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) exceeds "
-                f"threshold ({threshold:.1f} gCO2/kWh). {action} to reduce emissions."
+                f"threshold ({threshold:.1f} gCO2/kWh). Applying {strategy['label']} strategy."
             )
-            estimated_saved = _estimate_carbon_savings(asset, current_intensity)
+            estimated_saved = _estimate_carbon_savings(
+                asset,
+                current_intensity,
+                effectiveness_factor=strategy["effectiveness"],
+            )
             
             return ModulationDecision(
                 asset_id=asset.id,
@@ -126,7 +131,7 @@ def _evaluate_asset(
                 estimated_carbon_saved=estimated_saved
             )
     else:
-        # Carbon is low - restore to normal if currently modulated
+        # Carbon is low - restore all modulated assets to normal operation.
         if current_state:
             reason = (
                 f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) below "
@@ -161,7 +166,49 @@ def _determine_action_type(criticality: str) -> str:
         return "REDUCED"
 
 
-def _estimate_carbon_savings(asset, current_intensity: float) -> float:
+def _resolve_modulation_strategy(asset) -> Dict[str, Any]:
+    """Return action/effectiveness based on asset type heuristics and criticality."""
+    name = (getattr(asset, "name", "") or "").lower()
+
+    # Asset-specific smart logic
+    if "ev" in name or "charger" in name:
+        return {
+            "action": "DELAYED",
+            "effectiveness": 0.5,
+            "label": "EV charger delay",
+        }
+
+    if any(keyword in name for keyword in ["hvac", "air", "chiller", "heat pump", "ahu", "ventilation"]):
+        return {
+            "action": "REDUCED",
+            "effectiveness": 0.5,
+            "label": "HVAC capacity reduction",
+        }
+
+    if "light" in name:
+        return {
+            "action": "SHUTDOWN",
+            "effectiveness": 0.8,
+            "label": "lighting shutdown",
+        }
+
+    # Fallback strategy for assets without a recognized type
+    action = _determine_action_type(asset.criticality_classification)
+    if action == "SHUTDOWN":
+        effectiveness = 0.8
+    elif action in {"DELAYED", "REDUCED"}:
+        effectiveness = 0.5
+    else:
+        effectiveness = 0.5
+
+    return {
+        "action": action,
+        "effectiveness": effectiveness,
+        "label": "standard modulation",
+    }
+
+
+def _estimate_carbon_savings(asset, current_intensity: float, effectiveness_factor: float) -> float:
     """
     Estimate carbon savings from modulating an asset.
     
@@ -171,17 +218,8 @@ def _estimate_carbon_savings(asset, current_intensity: float) -> float:
     capacity_kw = asset.electrical_capacity_kw
     hours = 1.0
     
-    # Modulation effectiveness by criticality
-    effectiveness = {
-        "SHEDDABLE": 0.8,   # 80% reduction (shutdown)
-        "FLEXIBLE": 0.5,    # 50% reduction (delay/reduce)
-        "CRITICAL": 0.0     # Never modulated
-    }
-    
-    factor = effectiveness.get(asset.criticality_classification, 0.5)
-    
     # Carbon saved = capacity * hours * intensity * effectiveness / 1000 (gCO2 to kg)
-    saved_kg = (capacity_kw * hours * current_intensity * factor) / 1000.0
+    saved_kg = (capacity_kw * hours * current_intensity * effectiveness_factor) / 1000.0
     
     return round(saved_kg, 3)
 
