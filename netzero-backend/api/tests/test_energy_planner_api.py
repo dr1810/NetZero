@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -59,8 +60,32 @@ class EnergyPlannerAPITest(APITestCase):
         self.assertGreaterEqual(len(response.data["alternatives"]), 1)
         self.assertEqual(response.data["alternatives"][0]["band"], "green")
 
-    def test_energy_planner_rejects_window_without_forecast_data(self):
+    def test_energy_planner_returns_uniform_validation_error_shape(self):
+        response = self.client.post(
+            "/api/energy-planner/",
+            {
+                "building_id": self.building.id,
+                "device_type": "washing_machine",
+                "duration_hours": 2,
+                "earliest_start": "20:00",
+                "latest_finish": "08:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["detail"], "Planner validation failed.")
+        self.assertIn("latest_finish", response.data["errors"])
+
+    @patch("api.services.energy_planner.ingest_region_forecast")
+    def test_energy_planner_rejects_window_without_forecast_data(self, mock_ingest):
         CarbonForecast.objects.all().delete()
+        mock_ingest.return_value = type("Result", (), {
+            "region_id": "13",
+            "stored_points": 0,
+            "used_fallback": False,
+            "error": "no data",
+        })()
         response = self.client.post(
             "/api/energy-planner/",
             {
@@ -75,3 +100,41 @@ class EnergyPlannerAPITest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("No carbon forecast data available", str(response.data))
+
+    @patch("api.services.energy_planner.ingest_region_forecast")
+    def test_energy_planner_ingests_forecast_on_demand(self, mock_ingest):
+        CarbonForecast.objects.all().delete()
+
+        def fake_ingest(region_id):
+            base = timezone.localtime().replace(hour=8, minute=0, second=0, microsecond=0)
+            for offset, intensity in enumerate([210, 120, 55, 60, 130]):
+                CarbonForecast.objects.create(
+                    region_id=region_id,
+                    forecast_time=base + timedelta(hours=offset),
+                    intensity_forecast=float(intensity),
+                    generation_mix=[],
+                    raw_payload={},
+                )
+            return type("Result", (), {
+                "region_id": region_id,
+                "stored_points": 5,
+                "used_fallback": False,
+                "error": None,
+            })()
+
+        mock_ingest.side_effect = fake_ingest
+
+        response = self.client.post(
+            "/api/energy-planner/",
+            {
+                "building_id": self.building.id,
+                "device_type": "washing_machine",
+                "duration_hours": 2,
+                "earliest_start": "08:00",
+                "latest_finish": "13:00",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["recommended_start"], "10:00")

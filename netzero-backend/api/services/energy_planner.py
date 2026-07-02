@@ -8,8 +8,13 @@ from typing import Any, Dict, List, Optional
 
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+import logging
 
 from api.models import BuildingProfile, CarbonForecast
+from api.services.forecast_ingestion import ingest_region_forecast
+
+
+logger = logging.getLogger(__name__)
 
 
 DEVICE_POWER_KW: Dict[str, float] = {
@@ -144,6 +149,42 @@ def _candidate_windows(
     return windows
 
 
+def _load_forecasts_for_window(building: BuildingProfile, window_start: datetime, window_end: datetime) -> List[CarbonForecast]:
+    forecasts = list(
+        CarbonForecast.objects.filter(
+            region_id=building.grid_zone_id,
+            forecast_time__gte=window_start,
+            forecast_time__lte=window_end,
+        ).order_by("forecast_time")
+    )
+    if forecasts:
+        return forecasts
+
+    logger.info(
+        "Energy planner found no cached forecasts for building=%s region=%s window=%s..%s. Triggering on-demand ingestion.",
+        building.id,
+        building.grid_zone_id,
+        window_start,
+        window_end,
+    )
+    ingestion_result = ingest_region_forecast(str(building.grid_zone_id))
+    logger.info(
+        "Energy planner on-demand ingestion result for region=%s stored_points=%s used_fallback=%s error=%s",
+        ingestion_result.region_id,
+        ingestion_result.stored_points,
+        ingestion_result.used_fallback,
+        ingestion_result.error,
+    )
+
+    return list(
+        CarbonForecast.objects.filter(
+            region_id=building.grid_zone_id,
+            forecast_time__gte=window_start,
+            forecast_time__lte=window_end,
+        ).order_by("forecast_time")
+    )
+
+
 def plan_green_energy_window(
     *,
     user,
@@ -163,13 +204,7 @@ def plan_green_energy_window(
     if window_end <= window_start:
         raise ValidationError("latest_finish must be after earliest_start.")
 
-    forecasts = list(
-        CarbonForecast.objects.filter(
-            region_id=building.grid_zone_id,
-            forecast_time__gte=window_start,
-            forecast_time__lte=window_end,
-        ).order_by("forecast_time")
-    )
+    forecasts = _load_forecasts_for_window(building, window_start, window_end)
     if not forecasts:
         raise ValidationError("No carbon forecast data available for the selected building and time window.")
 

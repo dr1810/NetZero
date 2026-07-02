@@ -58,6 +58,15 @@ def _carbon_debug(message, *args):
     if _carbon_debug_enabled():
         logger.info(message, *args)
 
+
+def _planner_validation_error(detail):
+    return drf_serializers.ValidationError(
+        {
+            "detail": "Planner validation failed.",
+            "errors": detail,
+        }
+    )
+
 class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
     serializer_class = CarbonPreferenceSerializer
@@ -1221,8 +1230,11 @@ class EnergyPlannerView(APIView):
     def post(self, request):
         from api.services.energy_planner import plan_green_energy_window
 
+        logger.info("Energy planner request.data=%s", request.data)
         serializer = EnergyPlannerRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.warning("Energy planner serializer.errors=%s", serializer.errors)
+            raise _planner_validation_error(serializer.errors)
         try:
             result = plan_green_energy_window(
                 user=request.user,
@@ -1233,7 +1245,7 @@ class EnergyPlannerView(APIView):
 
             if isinstance(exc, DjangoValidationError):
                 detail = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
-                raise drf_serializers.ValidationError(detail)
+                raise _planner_validation_error(detail)
             raise
         return Response(result, status=status.HTTP_200_OK)
 
@@ -1245,11 +1257,12 @@ class EnergyPlannerSaveRecommendationView(APIView):
         from api.models import BuildingProfile, PlannerRecommendation
 
         serializer = PlannerRecommendationActionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            raise _planner_validation_error(serializer.errors)
         validated = serializer.validated_data
         building = BuildingProfile.objects.filter(id=validated["building_id"], owner=request.user).first()
         if building is None:
-            raise drf_serializers.ValidationError({"building_id": ["Building not found for this user."]})
+            raise _planner_validation_error({"building_id": ["Building not found for this user."]})
 
         now = timezone.localtime()
         recommended_start_at = now.replace(
@@ -1299,11 +1312,12 @@ class EnergyPlannerScheduleModulationView(APIView):
         from api.models import BuildingProfile, PlannerRecommendation
 
         serializer = PlannerRecommendationActionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            raise _planner_validation_error(serializer.errors)
         validated = serializer.validated_data
         building = BuildingProfile.objects.filter(id=validated["building_id"], owner=request.user).first()
         if building is None:
-            raise drf_serializers.ValidationError({"building_id": ["Building not found for this user."]})
+            raise _planner_validation_error({"building_id": ["Building not found for this user."]})
 
         now = timezone.localtime()
         scheduled_for = now.replace(

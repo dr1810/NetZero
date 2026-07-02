@@ -75,6 +75,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function extractApiErrorMessage(bodyJson: Record<string, unknown> | null, bodyText: string, fallback: string) {
+  if (isRecord(bodyJson)) {
+    const nestedErrors = isRecord(bodyJson.errors)
+      ? bodyJson.errors as Record<string, unknown>
+      : null;
+
+    if (nestedErrors) {
+      for (const [field, value] of Object.entries(nestedErrors)) {
+        if (Array.isArray(value) && value.length > 0) {
+          return `${field}: ${String(value[0])}`;
+        }
+        if (typeof value === "string" && value) {
+          return `${field}: ${value}`;
+        }
+      }
+    }
+
+    if (typeof bodyJson.detail === "string" && bodyJson.detail) {
+      return bodyJson.detail;
+    }
+    if (Array.isArray(bodyJson.detail) && bodyJson.detail.length > 0) {
+      return String(bodyJson.detail[0]);
+    }
+    if (Array.isArray(bodyJson.non_field_errors) && bodyJson.non_field_errors.length > 0) {
+      return String(bodyJson.non_field_errors[0]);
+    }
+
+    for (const [field, value] of Object.entries(bodyJson)) {
+      if (Array.isArray(value) && value.length > 0) {
+        return `${field}: ${String(value[0])}`;
+      }
+      if (typeof value === "string" && value) {
+        return `${field}: ${value}`;
+      }
+    }
+  }
+
+  return bodyText || fallback;
+}
+
 export const createAsset = async (
   payload: NewAssetInput
 ) => {
@@ -776,11 +816,11 @@ export async function planGreenEnergy(payload: EnergyPlannerRequest): Promise<En
   }
 
   if (!res.ok) {
-    const message =
-      (isRecord(bodyJson) && typeof bodyJson.detail === 'string' && bodyJson.detail) ||
-      (isRecord(bodyJson) && Array.isArray(bodyJson.non_field_errors) && String(bodyJson.non_field_errors[0] || '')) ||
-      bodyText ||
-      `Failed to plan energy window (${res.status})`;
+    const message = extractApiErrorMessage(
+      bodyJson,
+      bodyText,
+      `Failed to plan energy window (${res.status})`
+    );
     throw new Error(message);
   }
 
@@ -807,10 +847,11 @@ async function postPlannerRecommendation(path: string, payload: PlannerRecommend
   }
 
   if (!res.ok) {
-    const message =
-      (isRecord(bodyJson) && typeof bodyJson.detail === 'string' && bodyJson.detail) ||
-      bodyText ||
-      `Planner action failed (${res.status})`;
+    const message = extractApiErrorMessage(
+      bodyJson,
+      bodyText,
+      `Planner action failed (${res.status})`
+    );
     throw new Error(message);
   }
 
