@@ -105,6 +105,9 @@ export default function NewCarbonPreferenceModal({
             onChange={(e) =>
               setThreshold(e.target.value)
             }
+            min={50}
+            max={500}
+            step="1"
             className="w-full border p-2 rounded"
           />
 
@@ -115,6 +118,8 @@ export default function NewCarbonPreferenceModal({
             onChange={(e) =>
               setBudget(e.target.value)
             }
+            min={0}
+            step="0.1"
             className="w-full border p-2 rounded"
           />
 
