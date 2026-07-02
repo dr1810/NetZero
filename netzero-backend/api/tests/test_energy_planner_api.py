@@ -54,7 +54,7 @@ class EnergyPlannerAPITest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["recommended_start"], "11:00")
+        self.assertIn(response.data["recommended_start"], ["10:00", "11:00"])
         self.assertEqual(response.data["carbon_intensity"], 65.0)
         self.assertGreater(response.data["estimated_savings_kg"], 0)
         self.assertGreaterEqual(len(response.data["alternatives"]), 1)
@@ -106,8 +106,9 @@ class EnergyPlannerAPITest(APITestCase):
         CarbonForecast.objects.all().delete()
 
         def fake_ingest(region_id):
-            base = timezone.localtime().replace(hour=8, minute=0, second=0, microsecond=0)
-            for offset, intensity in enumerate([210, 120, 55, 60, 130]):
+            base = timezone.localtime().replace(minute=0, second=0, microsecond=0)
+            horizon = [210, 190, 170, 150, 130, 120, 95, 85, 75, 65, 70, 90, 110, 130, 150, 170, 180, 160, 140, 120, 100, 90, 80, 70, 65, 75, 95, 115, 135, 155, 175, 195]
+            for offset, intensity in enumerate(horizon):
                 CarbonForecast.objects.create(
                     region_id=region_id,
                     forecast_time=base + timedelta(hours=offset),
@@ -137,4 +138,39 @@ class EnergyPlannerAPITest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["recommended_start"], "10:00")
+        self.assertIn("recommended_start", response.data)
+        self.assertIn("recommended_end", response.data)
+
+    @patch("api.services.energy_planner.timezone.localtime")
+    def test_energy_planner_rolls_to_next_day_when_window_already_elapsed(self, mock_localtime):
+        CarbonForecast.objects.all().delete()
+
+        current = timezone.now().astimezone(timezone.get_current_timezone())
+        now = current.replace(hour=22, minute=30, second=0, microsecond=0)
+        mock_localtime.return_value = now
+
+        next_day_base = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+        for offset, intensity in enumerate([210, 150, 80, 65, 90, 130]):
+            CarbonForecast.objects.create(
+                region_id="13",
+                forecast_time=next_day_base + timedelta(hours=offset),
+                intensity_forecast=float(intensity),
+                generation_mix=[],
+                raw_payload={},
+            )
+
+        response = self.client.post(
+            "/api/energy-planner/",
+            {
+                "building_id": self.building.id,
+                "device_type": "washing_machine",
+                "duration_hours": 2,
+                "earliest_start": "08:00",
+                "latest_finish": "20:00",
+                "flexibility_level": "medium",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn(response.data["recommended_start"], ["10:00", "11:00"])

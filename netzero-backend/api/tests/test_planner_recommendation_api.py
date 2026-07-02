@@ -1,4 +1,5 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -79,7 +80,26 @@ class PlannerRecommendationAPITest(APITestCase):
         recommendation.recommended_start_at = recommendation.scheduled_for
         recommendation.save(update_fields=["scheduled_for", "recommended_start_at"])
 
-        summary = run_scheduled_planner_actions_task()
+        with patch("api.services.carbon_monitor.should_trigger_modulation") as mock_should_trigger:
+            mock_should_trigger.return_value = (
+                True,
+                {
+                    "current_intensity": 240.0,
+                    "threshold": 50.0,
+                    "index": "very high",
+                    "region_id": "13",
+                    "timestamp": timezone.now().isoformat(),
+                    "source": "test",
+                    "generation_mix": [],
+                    "fuel_percentages": {},
+                    "renewable_share": 20.0,
+                    "fossil_share": 80.0,
+                    "green_score": 10,
+                    "green_score_band": "poor",
+                },
+            )
+            summary = run_scheduled_planner_actions_task()
+
         recommendation.refresh_from_db()
         self.asset.refresh_from_db()
 

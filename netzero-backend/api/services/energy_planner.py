@@ -65,19 +65,25 @@ def _resolve_building_for_user(user, building_id: Optional[int]) -> BuildingProf
     return building
 
 
-def _target_day_window(base_dt: datetime, earliest_start: time, latest_finish: time) -> tuple[datetime, datetime]:
-    start_dt = base_dt.replace(
+def _target_day_window(now_local: datetime, earliest_start: time, latest_finish: time) -> tuple[datetime, datetime]:
+    start_dt = now_local.replace(
         hour=earliest_start.hour,
         minute=earliest_start.minute,
         second=0,
         microsecond=0,
     )
-    end_dt = base_dt.replace(
+    end_dt = now_local.replace(
         hour=latest_finish.hour,
         minute=latest_finish.minute,
         second=0,
         microsecond=0,
     )
+
+    # If today's selected window has already elapsed, plan against the next day.
+    if end_dt <= now_local:
+        start_dt = start_dt + timedelta(days=1)
+        end_dt = end_dt + timedelta(days=1)
+
     return start_dt, end_dt
 
 
