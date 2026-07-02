@@ -855,7 +855,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 )
                 if not has_preference or not automation_enabled or not building.grid_zone_id:
                     fallback_threshold = (
-                        building.carbon_preference.carbon_intensity_threshold
+                        min(max(float(building.carbon_preference.carbon_intensity_threshold), 50.0), 500.0)
                         if has_preference else 300.0
                     )
                     current = (
@@ -887,7 +887,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 return Response({
                     "current_intensity": 0.0,
                     "threshold": (
-                        building.carbon_preference.carbon_intensity_threshold
+                        min(max(float(building.carbon_preference.carbon_intensity_threshold), 50.0), 500.0)
                         if has_preference else 300.0
                     ),
                     "index": "unknown",
@@ -1004,10 +1004,12 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
 
             threshold_raw = request.data.get("threshold")
             if threshold_raw in [None, ""]:
-                threshold = (
+                threshold = float(
+                    (
                     building.carbon_preference.carbon_intensity_threshold
                     if hasattr(building, "carbon_preference")
                     else 300.0
+                    )
                 )
             else:
                 try:
@@ -1018,9 +1020,9 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                         status=status.HTTP_400_BAD_REQUEST,
                     )
 
-            if threshold < 0:
+            if threshold < 50 or threshold > 500:
                 return Response(
-                    {"error": "threshold must be non-negative"},
+                    {"error": "threshold must be between 50 and 500 gCO2/kWh"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -1049,6 +1051,18 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "timestamp": timezone.now(),
                     "source": "unavailable",
                 }
+
+            if carbon_data["source"] == "unavailable":
+                return Response(
+                    {
+                        "status": "skipped",
+                        "message": "Carbon intensity data unavailable. Modulation skipped.",
+                        "carbon_data": carbon_data,
+                        "decisions": [],
+                        "applied_count": 0,
+                    },
+                    status=status.HTTP_200_OK,
+                )
 
             decisions = evaluate_building_modulation(building.id, carbon_data, dry_run=dry_run)
             decisions_payload = [

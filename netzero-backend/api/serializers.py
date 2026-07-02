@@ -19,9 +19,9 @@ class CarbonPreferenceSerializer(serializers.ModelSerializer):
         ]
 
     def validate_carbon_intensity_threshold(self, value):
-        if value < 0:
+        if value < 50 or value > 500:
             raise serializers.ValidationError(
-                "Carbon intensity threshold cannot be negative."
+                "Carbon intensity threshold must be between 50 and 500 gCO2/kWh."
             )
         return value
 

@@ -614,7 +614,7 @@ export interface ModulationEventsResponse {
 }
 
 export interface TriggerModulationResponse {
-  status: 'success' | 'dry_run' | 'no_action' | 'error';
+  status: 'success' | 'dry_run' | 'no_action' | 'skipped' | 'error';
   message?: string;
   applied_count?: number;
   decisions?: Array<{

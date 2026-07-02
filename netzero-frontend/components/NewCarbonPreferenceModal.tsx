@@ -38,8 +38,8 @@ export default function NewCarbonPreferenceModal({
     const parsedThreshold = Number(threshold);
     const parsedBudget = Number(budget);
 
-    if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
-      setError("Carbon threshold must be a non-negative number.");
+    if (!Number.isFinite(parsedThreshold) || parsedThreshold < 50 || parsedThreshold > 500) {
+      setError("Carbon threshold must be between 50 and 500 gCO2/kWh.");
       return;
     }
 

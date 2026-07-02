@@ -110,6 +110,8 @@ def _evaluate_asset(
         # Carbon is high - activate modulation if not already active
         if not current_state:
             strategy = _resolve_modulation_strategy(asset)
+            if strategy is None:
+                return None
             action = strategy["action"]
             reason = (
                 f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) exceeds "
@@ -166,9 +168,13 @@ def _determine_action_type(criticality: str) -> str:
         return "REDUCED"
 
 
-def _resolve_modulation_strategy(asset) -> Dict[str, Any]:
+def _resolve_modulation_strategy(asset) -> Optional[Dict[str, Any]]:
     """Return action/effectiveness based on asset type heuristics and criticality."""
     name = (getattr(asset, "name", "") or "").lower()
+
+    # Preserve refrigeration continuity by default.
+    if any(keyword in name for keyword in ["fridge", "freezer", "refrigeration", "cold room"]):
+        return None
 
     # Asset-specific smart logic
     if "ev" in name or "charger" in name:
@@ -192,8 +198,18 @@ def _resolve_modulation_strategy(asset) -> Dict[str, Any]:
             "label": "lighting shutdown",
         }
 
+    if any(keyword in name for keyword in ["induction", "cooker", "oven", "toaster"]):
+        return {
+            "action": "DELAYED",
+            "effectiveness": 0.5,
+            "label": "cooking load delay",
+        }
+
     # Fallback strategy for assets without a recognized type
-    action = _determine_action_type(asset.criticality_classification)
+    if asset.criticality_classification == "SHEDDABLE":
+        action = "SHUTDOWN"
+    else:
+        action = "REDUCED"
     if action == "SHUTDOWN":
         effectiveness = 0.8
     elif action in {"DELAYED", "REDUCED"}:

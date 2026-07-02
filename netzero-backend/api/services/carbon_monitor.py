@@ -203,7 +203,8 @@ def should_trigger_modulation(building_id: int) -> tuple[bool, Optional[Dict[str
             logger.warning(f"Could not get carbon intensity for building {building_id}")
             return False, None
         
-        threshold = building.carbon_preference.carbon_intensity_threshold
+        raw_threshold = float(building.carbon_preference.carbon_intensity_threshold)
+        threshold = min(max(raw_threshold, 50.0), 500.0)
         should_modulate = current["intensity"] > threshold
         
         carbon_data = {

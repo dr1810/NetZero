@@ -53,6 +53,38 @@ class CarbonPreferenceAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_reject_threshold_too_low(self):
+        payload = {
+            "building": self.building.id,
+            "carbon_intensity_threshold": 2,
+            "daily_carbon_budget_kg": 30,
+            "automation_enabled": True
+        }
+
+        response = self.client.post(
+            "/api/preferences/",
+            payload,
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_reject_threshold_too_high(self):
+        payload = {
+            "building": self.building.id,
+            "carbon_intensity_threshold": 800,
+            "daily_carbon_budget_kg": 30,
+            "automation_enabled": True
+        }
+
+        response = self.client.post(
+            "/api/preferences/",
+            payload,
+            format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_accept_valid_values(self):
         payload = {
             "building": self.building.id,

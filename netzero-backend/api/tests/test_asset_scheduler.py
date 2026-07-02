@@ -115,3 +115,23 @@ class AssetSchedulerSmartLogicTests(TestCase):
         self.assertFalse(decision_by_asset[ev.id].new_state)
         self.assertFalse(decision_by_asset[hvac.id].new_state)
         self.assertFalse(decision_by_asset[lighting.id].new_state)
+
+    def test_threshold_exceeded_does_not_modulate_refrigeration(self):
+        fridge = FlexibleAsset.objects.create(
+            building=self.building,
+            name="Main Fridge Unit",
+            electrical_capacity_kw=3.0,
+            criticality_classification="FLEXIBLE",
+            is_modulated_active=False,
+        )
+
+        decisions = evaluate_building_modulation(
+            self.building.id,
+            {
+                "current_intensity": 450.0,
+                "threshold": 300.0,
+            },
+        )
+
+        decision_by_asset = {d.asset_id: d for d in decisions}
+        self.assertNotIn(fridge.id, decision_by_asset)

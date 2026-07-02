@@ -203,7 +203,20 @@ class CarbonMonitoringAPITest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["status"], "dry_run")
+        self.assertEqual(response.data["status"], "skipped")
         self.assertEqual(response.data["carbon_data"]["source"], "unavailable")
-        self.assertIn("decisions", response.data)
         self.assertEqual(response.data["decisions"], [])
+        self.assertEqual(response.data["applied_count"], 0)
+
+    def test_trigger_modulation_rejects_out_of_range_threshold(self):
+        self.building.grid_zone_id = "1"
+        self.building.save(update_fields=["grid_zone_id"])
+
+        response = self.client.post(
+            f"/api/buildings/{self.building.id}/trigger-modulation/",
+            {"dry_run": True, "threshold": 2},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("between 50 and 500", response.data["error"])

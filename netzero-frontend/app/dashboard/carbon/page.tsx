@@ -102,6 +102,12 @@ export default function CarbonMonitoringPage() {
       setTriggerLoading(true);
       const result = await triggerModulation(selectedBuilding, dryRun);
 
+      if (result.status === "skipped") {
+        setDryRunResult(result);
+        setError(result.message || "Carbon intensity data unavailable. Modulation skipped.");
+        return;
+      }
+
       if (dryRun) {
         setDryRunResult(result);
       } else {
