@@ -5,6 +5,7 @@ from .models import OperationalSchedule
 from rest_framework import serializers
 from .models import CarbonPreference, NotificationEvent
 from .services.postcode_region import normalize_postcode, validate_postcode_format
+from datetime import time
 
 class CarbonPreferenceSerializer(serializers.ModelSerializer):
 
@@ -138,3 +139,44 @@ class RetrofitSimulationSerializer(serializers.Serializer):
     orientation = serializers.IntegerField(required=False)
     glazing_area = serializers.FloatField(required=False)
     glazing_area_distribution = serializers.IntegerField(required=False)
+
+
+class EnergyPlannerRequestSerializer(serializers.Serializer):
+    building_id = serializers.IntegerField(required=False)
+    device_type = serializers.ChoiceField(
+        choices=[
+            "ev_charger",
+            "washing_machine",
+            "dishwasher",
+            "hvac",
+            "water_heater",
+            "flexible_load",
+        ]
+    )
+    duration_hours = serializers.FloatField(min_value=0.5, max_value=12)
+    earliest_start = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    latest_finish = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    flexibility_level = serializers.ChoiceField(
+        choices=["low", "medium", "high"],
+        required=False,
+        default="medium",
+    )
+
+    def validate(self, data):
+        earliest = data.get("earliest_start")
+        latest = data.get("latest_finish")
+        duration_hours = float(data.get("duration_hours") or 0)
+
+        earliest_minutes = earliest.hour * 60 + earliest.minute
+        latest_minutes = latest.hour * 60 + latest.minute
+        if latest_minutes <= earliest_minutes:
+            raise serializers.ValidationError(
+                {"latest_finish": ["latest_finish must be after earliest_start on the same day."]}
+            )
+
+        if (latest_minutes - earliest_minutes) < int(duration_hours * 60):
+            raise serializers.ValidationError(
+                "Requested duration does not fit within the selected planning window."
+            )
+
+        return data

@@ -28,6 +28,7 @@ import {
 import NewBuildingModal from "@/components/NewBuildingModal";
 import NewAssetModal from "@/components/NewAssetModal";
 import NewCarbonPreferenceModal from "@/components/NewCarbonPreferenceModal";
+import GreenEnergyPlanner from "@/components/GreenEnergyPlanner";
 import { useRouter } from "next/navigation";
 export default function DashboardPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
@@ -252,6 +253,9 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      <GreenEnergyPlanner buildings={buildings} />
+
       {/* Active Carbon Modulation Events */}
       {activeModulationCount > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm">

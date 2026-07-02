@@ -16,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.exceptions import PermissionDenied
+from rest_framework import serializers as drf_serializers
 from django.contrib.auth import get_user_model
 import logging
 
@@ -33,6 +34,7 @@ from .serializers import (
     OperationalScheduleSerializer,
     CarbonPreferenceSerializer,
     RetrofitSimulationSerializer,
+    EnergyPlannerRequestSerializer,
 )
 from .services.ml_inference import run_thermodynamic_inference, generate_mock_schedule
 from .services.schedule_generator import generate_schedule_for_building
@@ -1209,4 +1211,27 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+class EnergyPlannerView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from api.services.energy_planner import plan_green_energy_window
+
+        serializer = EnergyPlannerRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            result = plan_green_energy_window(
+                user=request.user,
+                **serializer.validated_data,
+            )
+        except Exception as exc:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+
+            if isinstance(exc, DjangoValidationError):
+                detail = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+                raise drf_serializers.ValidationError(detail)
+            raise
+        return Response(result, status=status.HTTP_200_OK)
     

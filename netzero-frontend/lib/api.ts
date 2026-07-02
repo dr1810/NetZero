@@ -692,6 +692,66 @@ export async function getModulationEvents(
   return res.json();
 }
 
+export interface EnergyPlannerAlternative {
+  start: string;
+  end: string;
+  carbon_intensity: number;
+  band: 'green' | 'yellow' | 'red';
+  estimated_savings_kg: number;
+}
+
+export interface EnergyPlannerResponse {
+  building_id: number;
+  building_postcode: string;
+  device_type: string;
+  recommended_start: string;
+  recommended_end: string;
+  carbon_intensity: number;
+  estimated_savings_kg: number;
+  flexibility_level: 'low' | 'medium' | 'high';
+  alternatives: EnergyPlannerAlternative[];
+}
+
+export interface EnergyPlannerRequest {
+  building_id?: number;
+  device_type: 'ev_charger' | 'washing_machine' | 'dishwasher' | 'hvac' | 'water_heater' | 'flexible_load';
+  duration_hours: number;
+  earliest_start: string;
+  latest_finish: string;
+  flexibility_level?: 'low' | 'medium' | 'high';
+}
+
+export async function planGreenEnergy(payload: EnergyPlannerRequest): Promise<EnergyPlannerResponse> {
+  const res = await authFetch('/energy-planner/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  let bodyText = '';
+  try {
+    bodyText = await res.text();
+  } catch {}
+
+  let bodyJson: Record<string, unknown> | null = null;
+  try {
+    bodyJson = JSON.parse(bodyText || 'null');
+  } catch {
+    bodyJson = null;
+  }
+
+  if (!res.ok) {
+    const message =
+      (isRecord(bodyJson) && typeof bodyJson.detail === 'string' && bodyJson.detail) ||
+      (isRecord(bodyJson) && Array.isArray(bodyJson.non_field_errors) && String(bodyJson.non_field_errors[0] || '')) ||
+      bodyText ||
+      `Failed to plan energy window (${res.status})`;
+    throw new Error(message);
+  }
+
+  return bodyJson as unknown as EnergyPlannerResponse;
+}
+
 /**
  * Manually trigger modulation for a building
  */

@@ -6,7 +6,8 @@ from .views import (
     FlexibleAssetViewSet,
     CarbonPreferenceViewSet,
     OperationalScheduleViewSet,
-    CarbonMonitoringViewSet
+    CarbonMonitoringViewSet,
+    EnergyPlannerView,
 )
 
 router = DefaultRouter()
@@ -24,5 +25,6 @@ router.register(r'buildings', CarbonMonitoringViewSet, basename='carbon-monitori
 
 
 urlpatterns = [
+    path('energy-planner/', EnergyPlannerView.as_view(), name='energy-planner'),
     path('', include(router.urls)),
 ]
