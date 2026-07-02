@@ -1,7 +1,7 @@
 from rest_framework.test import APITestCase
 from rest_framework import status
 
-from api.models import BuildingProfile
+from api.models import BuildingProfile, CarbonPreference
 
 
 class CarbonPreferenceAPITests(APITestCase):
@@ -68,3 +68,28 @@ class CarbonPreferenceAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_create_upserts_existing_preference(self):
+        CarbonPreference.objects.create(
+            building=self.building,
+            carbon_intensity_threshold=220,
+            daily_carbon_budget_kg=40,
+            automation_enabled=True,
+        )
+
+        response = self.client.post(
+            "/api/preferences/",
+            {
+                "building": self.building.id,
+                "carbon_intensity_threshold": 180,
+                "daily_carbon_budget_kg": 35,
+                "automation_enabled": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        pref = CarbonPreference.objects.get(building=self.building)
+        self.assertEqual(pref.carbon_intensity_threshold, 180)
+        self.assertEqual(pref.daily_carbon_budget_kg, 35)
+        self.assertEqual(pref.automation_enabled, False)

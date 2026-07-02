@@ -163,13 +163,13 @@ export default function AnalyticsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Card 1: Building Thermal Metrics Line Plot */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900">Thermodynamic Infiltration Multipliers</h2>
             <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating calculated building structural baseline loads from live twin vectors.</p>
           </div>
           
-          <div className="w-full h-[320px] pr-4 text-xs font-mono">
+          <div className="w-full min-w-0 h-[320px] pr-4 text-xs font-mono">
             {buildings.length === 0 ? (
               <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
                 No active digital twin configurations discovered to plot line analytics.
@@ -191,13 +191,13 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Card 2: Digital Twin Matrix Asset Distribution Bar Chart */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
+        <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col justify-between">
           <div>
             <h2 className="text-base font-bold text-slate-900">Flexible Hardware Capacity Analysis</h2>
             <p className="text-xs text-slate-400 mt-0.5 mb-6">Evaluating localized flexible registry capacity thresholds from hardware records.</p>
           </div>
 
-          <div className="w-full h-[320px] pr-4 text-xs font-mono">
+          <div className="w-full min-w-0 h-[320px] pr-4 text-xs font-mono">
             {assets.length === 0 ? (
               <div className="h-full flex items-center justify-center border border-dashed border-slate-200 rounded-xl bg-slate-50 text-slate-400 italic">
                 Awaiting active modular edge assets to generate calibration charts.

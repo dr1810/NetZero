@@ -48,6 +48,27 @@ class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
     serializer_class = CarbonPreferenceSerializer
 
+    def create(self, request, *args, **kwargs):
+        """Create or update a building preference in one endpoint to avoid duplicate-create failures."""
+        building_id = request.data.get("building")
+        if not building_id:
+            return Response(
+                {"detail": "building is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        existing = CarbonPreference.objects.filter(building_id=building_id).first()
+        if existing:
+            serializer = self.get_serializer(existing, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            self.perform_update(serializer)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 # ML inference helpers moved to api/services/ml_inference.py
 
 # -------------------------------------------------------------------------
@@ -863,10 +884,18 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                         "should_modulate": False
                     })
 
-                return Response(
-                    {"error": "Could not fetch carbon intensity data"},
-                    status=status.HTTP_503_SERVICE_UNAVAILABLE
-                )
+                return Response({
+                    "current_intensity": 0.0,
+                    "threshold": (
+                        building.carbon_preference.carbon_intensity_threshold
+                        if has_preference else 300.0
+                    ),
+                    "index": "unknown",
+                    "region_id": building.grid_zone_id,
+                    "timestamp": timezone.now(),
+                    "source": "unavailable",
+                    "should_modulate": False
+                })
             
             return Response({
                 "current_intensity": carbon_data["current_intensity"],

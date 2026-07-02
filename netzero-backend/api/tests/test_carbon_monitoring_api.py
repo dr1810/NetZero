@@ -5,6 +5,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from api.models import BuildingProfile, FlexibleAsset, ModulationEvent
+from api.models import CarbonPreference
 
 
 class CarbonMonitoringAPITest(APITestCase):
@@ -162,3 +163,22 @@ class CarbonMonitoringAPITest(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    @patch("api.services.carbon_monitor.get_current_carbon_intensity")
+    def test_carbon_intensity_returns_fallback_when_upstream_unavailable(self, mock_current):
+        self.building.grid_zone_id = "1"
+        self.building.save(update_fields=["grid_zone_id"])
+        CarbonPreference.objects.create(
+            building=self.building,
+            carbon_intensity_threshold=250,
+            daily_carbon_budget_kg=30,
+            automation_enabled=True,
+        )
+        mock_current.return_value = None
+
+        response = self.client.get(f"/api/buildings/{self.building.id}/carbon-intensity/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["source"], "unavailable")
+        self.assertEqual(response.data["should_modulate"], False)
+        self.assertEqual(response.data["threshold"], 250)

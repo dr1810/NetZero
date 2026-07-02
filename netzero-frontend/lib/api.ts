@@ -463,20 +463,17 @@ export interface CarbonPreference {
 export async function createCarbonPreference(
   payload: CarbonPreference
 ) {
-  const response = await fetch(
-    buildUrl("/preferences/"),
-    {
-      method: "POST",
-      headers: {
-        ...buildAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  const response = await authFetch("/preferences/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
-    throw new Error("Failed to create preference");
+    const body = await response.text().catch(() => "");
+    throw new Error(body || "Failed to create preference");
   }
 
   return response.json();
@@ -486,20 +483,17 @@ export async function updateCarbonPreference(
   id: number,
   payload: CarbonPreference
 ) {
-  const response = await fetch(
-    buildUrl(`/preferences/${id}/`),
-    {
-      method: "PUT",
-      headers: {
-        ...buildAuthHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  const response = await authFetch(`/preferences/${id}/`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 
   if (!response.ok) {
-    throw new Error("Failed to update preference");
+    const body = await response.text().catch(() => "");
+    throw new Error(body || "Failed to update preference");
   }
 
   return response.json();

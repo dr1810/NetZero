@@ -21,6 +21,7 @@ export default function NewCarbonPreferenceModal({
   const [threshold, setThreshold] = useState("");
   const [budget, setBudget] = useState("");
   const [automation, setAutomation] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -29,20 +30,38 @@ export default function NewCarbonPreferenceModal({
   ) => {
     e.preventDefault();
 
+    if (!building) {
+      setError("Please select a building.");
+      return;
+    }
+
+    const parsedThreshold = Number(threshold);
+    const parsedBudget = Number(budget);
+
+    if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
+      setError("Carbon threshold must be a non-negative number.");
+      return;
+    }
+
+    if (!Number.isFinite(parsedBudget) || parsedBudget < 0) {
+      setError("Daily carbon budget must be a non-negative number.");
+      return;
+    }
+
     try {
+      setError(null);
       await createCarbonPreference({
         building: Number(building),
-        carbon_intensity_threshold:
-          Number(threshold),
-        daily_carbon_budget_kg:
-          Number(budget),
+        carbon_intensity_threshold: parsedThreshold,
+        daily_carbon_budget_kg: parsedBudget,
         automation_enabled: automation,
       });
 
       onSuccess();
       onClose();
-    } catch (err) {
-      alert("Failed to save preference");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to save preference";
+      setError(message);
     }
   };
 
@@ -127,6 +146,10 @@ export default function NewCarbonPreferenceModal({
               Save
             </button>
           </div>
+
+          {error && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
         </form>
       </div>
     </div>
