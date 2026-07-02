@@ -1230,11 +1230,14 @@ class EnergyPlannerView(APIView):
     def post(self, request):
         from api.services.energy_planner import plan_green_energy_window
 
+        print("ENERGY PLANNER REQUEST:", request.data)
         logger.info("Energy planner request.data=%s", request.data)
         serializer = EnergyPlannerRequestSerializer(data=request.data)
         if not serializer.is_valid():
+            print("ENERGY PLANNER ERRORS:", serializer.errors)
             logger.warning("Energy planner serializer.errors=%s", serializer.errors)
             raise _planner_validation_error(serializer.errors)
+        print("ENERGY PLANNER VALIDATED:", serializer.validated_data)
         try:
             result = plan_green_energy_window(
                 user=request.user,
@@ -1245,6 +1248,7 @@ class EnergyPlannerView(APIView):
 
             if isinstance(exc, DjangoValidationError):
                 detail = exc.message_dict if hasattr(exc, "message_dict") else exc.messages
+                print("ENERGY PLANNER SERVICE VALIDATION:", detail)
                 raise _planner_validation_error(detail)
             raise
         return Response(result, status=status.HTTP_200_OK)

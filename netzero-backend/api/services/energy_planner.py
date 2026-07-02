@@ -211,6 +211,17 @@ def plan_green_energy_window(
         raise ValidationError("latest_finish must be after earliest_start.")
 
     forecasts = _load_forecasts_for_window(building, window_start, window_end)
+    # Upstream forecast feeds can be sparse for specific day windows in production.
+    # Try the same clock window on the next two days before failing.
+    if not forecasts:
+        for day_offset in (1, 2):
+            shifted_start = window_start + timedelta(days=day_offset)
+            shifted_end = window_end + timedelta(days=day_offset)
+            forecasts = _load_forecasts_for_window(building, shifted_start, shifted_end)
+            if forecasts:
+                window_start, window_end = shifted_start, shifted_end
+                break
+
     if not forecasts:
         raise ValidationError("No carbon forecast data available for the selected building and time window.")
 

@@ -174,3 +174,50 @@ class EnergyPlannerAPITest(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn(response.data["recommended_start"], ["10:00", "11:00"])
+
+    @patch("api.services.energy_planner.ingest_region_forecast")
+    @patch("api.services.energy_planner.timezone.localtime")
+    def test_energy_planner_uses_next_day_when_selected_day_has_no_data(self, mock_localtime, mock_ingest):
+        CarbonForecast.objects.all().delete()
+
+        mock_ingest.return_value = type("Result", (), {
+            "region_id": "13",
+            "stored_points": 0,
+            "used_fallback": False,
+            "error": None,
+        })()
+
+        now = timezone.now().astimezone(timezone.get_current_timezone()).replace(
+            hour=9,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        mock_localtime.return_value = now
+
+        # No same-day forecasts in the selected window; only next-day points exist.
+        next_day_base = (now + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+        for offset, intensity in enumerate([200, 170, 110, 80, 70, 90, 120, 160]):
+            CarbonForecast.objects.create(
+                region_id="13",
+                forecast_time=next_day_base + timedelta(hours=offset),
+                intensity_forecast=float(intensity),
+                generation_mix=[],
+                raw_payload={},
+            )
+
+        response = self.client.post(
+            "/api/energy-planner/",
+            {
+                "building_id": self.building.id,
+                "device_type": "washing_machine",
+                "duration_hours": 2,
+                "earliest_start": "08:00",
+                "latest_finish": "16:00",
+                "flexibility_level": "medium",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn(response.data["recommended_start"], ["11:00", "12:00"])

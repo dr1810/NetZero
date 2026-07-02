@@ -70,6 +70,7 @@ export default function GreenEnergyPlanner({ buildings, preferredBuildingId = nu
       setLoading(true);
       setError(null);
       setActionMessage(null);
+      console.log("ENERGY PLANNER FORM SUBMIT:", form);
       const response = await planGreenEnergy(form);
       setResult(response);
     } catch (err: unknown) {

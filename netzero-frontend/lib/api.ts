@@ -77,8 +77,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function extractApiErrorMessage(bodyJson: Record<string, unknown> | null, bodyText: string, fallback: string) {
   if (isRecord(bodyJson)) {
-    const nestedErrors = isRecord(bodyJson.errors)
-      ? bodyJson.errors as Record<string, unknown>
+    const nestedErrorValue = bodyJson.errors;
+
+    if (Array.isArray(nestedErrorValue) && nestedErrorValue.length > 0) {
+      return String(nestedErrorValue[0]);
+    }
+
+    if (typeof nestedErrorValue === "string" && nestedErrorValue) {
+      return nestedErrorValue;
+    }
+
+    const nestedErrors = isRecord(nestedErrorValue)
+      ? nestedErrorValue as Record<string, unknown>
       : null;
 
     if (nestedErrors) {
@@ -797,6 +807,7 @@ export interface EnergyPlannerRequest {
 }
 
 export async function planGreenEnergy(payload: EnergyPlannerRequest): Promise<EnergyPlannerResponse> {
+  console.log('ENERGY PLANNER PAYLOAD:', payload);
   const res = await authFetch('/energy-planner/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
