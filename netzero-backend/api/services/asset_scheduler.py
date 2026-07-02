@@ -343,7 +343,12 @@ def apply_modulation_decisions(
         return 0
 
 
-def run_carbon_aware_scheduler(building_id: int, dry_run: bool = False) -> Dict[str, Any]:
+def run_carbon_aware_scheduler(
+    building_id: int,
+    dry_run: bool = False,
+    trigger_type: str = "AUTOMATIC",
+    initiated_by: str = "system",
+) -> Dict[str, Any]:
     """
     Main entry point: Check carbon intensity and apply modulations for a building.
     
@@ -392,8 +397,8 @@ def run_carbon_aware_scheduler(building_id: int, dry_run: bool = False) -> Dict[
                 building_id,
                 decisions,
                 carbon_data,
-                trigger_type="AUTOMATIC",
-                initiated_by="system"
+                trigger_type=trigger_type,
+                initiated_by=initiated_by,
             )
         
         return {

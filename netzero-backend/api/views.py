@@ -35,6 +35,8 @@ from .serializers import (
     CarbonPreferenceSerializer,
     RetrofitSimulationSerializer,
     EnergyPlannerRequestSerializer,
+    PlannerRecommendationActionSerializer,
+    PlannerRecommendationSerializer,
 )
 from .services.ml_inference import run_thermodynamic_inference, generate_mock_schedule
 from .services.schedule_generator import generate_schedule_for_building
@@ -1234,4 +1236,115 @@ class EnergyPlannerView(APIView):
                 raise drf_serializers.ValidationError(detail)
             raise
         return Response(result, status=status.HTTP_200_OK)
+
+
+class EnergyPlannerSaveRecommendationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from api.models import BuildingProfile, PlannerRecommendation
+
+        serializer = PlannerRecommendationActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+        building = BuildingProfile.objects.filter(id=validated["building_id"], owner=request.user).first()
+        if building is None:
+            raise drf_serializers.ValidationError({"building_id": ["Building not found for this user."]})
+
+        now = timezone.localtime()
+        recommended_start_at = now.replace(
+            hour=validated["recommended_start"].hour,
+            minute=validated["recommended_start"].minute,
+            second=0,
+            microsecond=0,
+        )
+        recommended_end_at = now.replace(
+            hour=validated["recommended_end"].hour,
+            minute=validated["recommended_end"].minute,
+            second=0,
+            microsecond=0,
+        )
+        if recommended_end_at <= recommended_start_at:
+            recommended_end_at = recommended_end_at + timezone.timedelta(days=1)
+
+        recommendation = PlannerRecommendation.objects.create(
+            owner=request.user,
+            building=building,
+            device_type=validated["device_type"],
+            flexibility_level=validated["flexibility_level"],
+            duration_hours=validated["duration_hours"],
+            earliest_start=validated["earliest_start"],
+            latest_finish=validated["latest_finish"],
+            recommended_start_at=recommended_start_at,
+            recommended_end_at=recommended_end_at,
+            carbon_intensity=validated["carbon_intensity"],
+            estimated_savings_kg=validated["estimated_savings_kg"],
+            alternatives=validated.get("alternatives", []),
+            action_type="SAVE_ONLY",
+            status="SAVED",
+        )
+        return Response(
+            {
+                "message": "Planner recommendation saved.",
+                "recommendation": PlannerRecommendationSerializer(recommendation).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class EnergyPlannerScheduleModulationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from api.models import BuildingProfile, PlannerRecommendation
+
+        serializer = PlannerRecommendationActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated = serializer.validated_data
+        building = BuildingProfile.objects.filter(id=validated["building_id"], owner=request.user).first()
+        if building is None:
+            raise drf_serializers.ValidationError({"building_id": ["Building not found for this user."]})
+
+        now = timezone.localtime()
+        scheduled_for = now.replace(
+            hour=validated["recommended_start"].hour,
+            minute=validated["recommended_start"].minute,
+            second=0,
+            microsecond=0,
+        )
+        if scheduled_for <= now:
+            scheduled_for = scheduled_for + timezone.timedelta(days=1)
+        recommended_end_at = now.replace(
+            hour=validated["recommended_end"].hour,
+            minute=validated["recommended_end"].minute,
+            second=0,
+            microsecond=0,
+        )
+        if recommended_end_at <= scheduled_for:
+            recommended_end_at = recommended_end_at + timezone.timedelta(days=1)
+
+        recommendation = PlannerRecommendation.objects.create(
+            owner=request.user,
+            building=building,
+            device_type=validated["device_type"],
+            flexibility_level=validated["flexibility_level"],
+            duration_hours=validated["duration_hours"],
+            earliest_start=validated["earliest_start"],
+            latest_finish=validated["latest_finish"],
+            recommended_start_at=scheduled_for,
+            recommended_end_at=recommended_end_at,
+            carbon_intensity=validated["carbon_intensity"],
+            estimated_savings_kg=validated["estimated_savings_kg"],
+            alternatives=validated.get("alternatives", []),
+            action_type="SCHEDULE_MODULATION",
+            status="PENDING",
+            scheduled_for=scheduled_for,
+        )
+        return Response(
+            {
+                "message": "Scheduled modulation check created.",
+                "recommendation": PlannerRecommendationSerializer(recommendation).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
     

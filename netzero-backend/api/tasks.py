@@ -2,6 +2,7 @@ from __future__ import annotations
 from celery import shared_task
 from django.utils import timezone
 from api.models import BuildingProfile
+from api.models import PlannerRecommendation
 from api.services.notification_service import analyze_forecast_and_notify
 from api.services.forecast_ingestion import ingest_forecasts_for_active_regions
 import random
@@ -92,4 +93,72 @@ def run_carbon_aware_modulation_task() -> dict:
         f"{results['errors']} errors"
     )
     
+    return results
+
+
+@shared_task
+def run_scheduled_planner_actions_task() -> dict:
+    from api.services.asset_scheduler import evaluate_building_modulation, apply_modulation_decisions
+    from api.services.carbon_monitor import should_trigger_modulation
+    from api.services.energy_planner import device_matches_name
+    import logging
+
+    logger = logging.getLogger(__name__)
+    now = timezone.now()
+    pending = PlannerRecommendation.objects.filter(
+        action_type="SCHEDULE_MODULATION",
+        status="PENDING",
+        scheduled_for__lte=now,
+    ).select_related("building", "owner")
+
+    results = {"processed": 0, "executed": 0, "failed": 0}
+
+    for recommendation in pending:
+        try:
+            should_modulate, carbon_data = should_trigger_modulation(recommendation.building_id)
+            if carbon_data is None:
+                recommendation.status = "FAILED"
+                recommendation.execution_result = {"message": "Carbon intensity unavailable at scheduled execution time."}
+                recommendation.executed_at = now
+                recommendation.save(update_fields=["status", "execution_result", "executed_at"])
+                results["processed"] += 1
+                results["failed"] += 1
+                continue
+
+            decisions = evaluate_building_modulation(recommendation.building_id, carbon_data, dry_run=False)
+            decisions = [
+                decision for decision in decisions
+                if device_matches_name(recommendation.device_type, decision.asset_name)
+            ]
+
+            applied_count = 0
+            if decisions:
+                applied_count = apply_modulation_decisions(
+                    recommendation.building_id,
+                    decisions,
+                    carbon_data,
+                    trigger_type="SCHEDULED",
+                    initiated_by=f"planner:{recommendation.id}",
+                )
+
+            recommendation.status = "EXECUTED"
+            recommendation.executed_at = now
+            recommendation.execution_result = {
+                "should_modulate": should_modulate,
+                "applied_count": applied_count,
+                "decision_count": len(decisions),
+                "carbon_intensity": carbon_data.get("current_intensity"),
+            }
+            recommendation.save(update_fields=["status", "executed_at", "execution_result"])
+            results["processed"] += 1
+            results["executed"] += 1
+        except Exception as exc:
+            logger.error("Scheduled planner action failed for recommendation %s: %s", recommendation.id, exc)
+            recommendation.status = "FAILED"
+            recommendation.executed_at = now
+            recommendation.execution_result = {"message": str(exc)}
+            recommendation.save(update_fields=["status", "executed_at", "execution_result"])
+            results["processed"] += 1
+            results["failed"] += 1
+
     return results

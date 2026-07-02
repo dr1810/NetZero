@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   fetchBuildings,
   getCarbonIntensity,
@@ -26,6 +27,7 @@ import {
   Eye,
   RefreshCw,
 } from "lucide-react";
+import GreenEnergyPlanner from "@/components/GreenEnergyPlanner";
 
 const CARBON_DEBUG = process.env.NEXT_PUBLIC_CARBON_DEBUG === "true";
 
@@ -39,6 +41,7 @@ function carbonDebug(message: string, payload?: unknown) {
 }
 
 export default function CarbonMonitoringPage() {
+  const searchParams = useSearchParams();
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<number | null>(null);
   const [carbonData, setCarbonData] = useState<CarbonIntensityResponse | null>(null);
@@ -51,12 +54,20 @@ export default function CarbonMonitoringPage() {
   const [dryRunResult, setDryRunResult] = useState<TriggerModulationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedReasonEventId, setExpandedReasonEventId] = useState<number | null>(null);
+  const plannerBuildingId = Number(searchParams?.get("buildingId") || "") || null;
+  const plannerStart = searchParams?.get("plannerStart") || "";
+  const plannerEnd = searchParams?.get("plannerEnd") || "";
+  const plannerDevice = searchParams?.get("plannerDevice") || "";
+  const plannerCarbon = searchParams?.get("plannerCarbon") || "";
+  const plannerSavings = searchParams?.get("plannerSavings") || "";
 
   const loadBuildings = useCallback(async () => {
     try {
       const data = await fetchBuildings();
       setBuildings(data);
-      if (data.length > 0) {
+      if (plannerBuildingId && data.some((building) => building.id === plannerBuildingId)) {
+        setSelectedBuilding(plannerBuildingId);
+      } else if (data.length > 0) {
         setSelectedBuilding(data[0].id);
       }
     } catch (err: unknown) {
@@ -65,7 +76,7 @@ export default function CarbonMonitoringPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [plannerBuildingId]);
 
   const loadCarbonData = useCallback(async () => {
     if (!selectedBuilding) return;
@@ -283,6 +294,23 @@ export default function CarbonMonitoringPage() {
           ))}
         </select>
       </div>
+
+      <div className="mb-6">
+        <GreenEnergyPlanner buildings={buildings} preferredBuildingId={selectedBuilding} />
+      </div>
+
+      {plannerStart && plannerEnd && plannerBuildingId === selectedBuilding && (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+          <p className="text-sm font-semibold text-emerald-900">Planner handoff ready for carbon controls</p>
+          <p className="mt-1 text-sm text-emerald-800">
+            Suggested low-carbon window for {plannerDevice.replaceAll("_", " ")}: {plannerStart} - {plannerEnd}
+          </p>
+          <p className="mt-1 text-xs text-emerald-700">
+            Forecast intensity {plannerCarbon || "-"} gCO₂/kWh • Estimated savings {plannerSavings || "-"} kg CO₂.
+            Use the dry run below to inspect what would happen if you modulated this building now, or trigger manually if the current grid state already warrants action.
+          </p>
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">

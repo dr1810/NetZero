@@ -21,6 +21,15 @@ DEVICE_POWER_KW: Dict[str, float] = {
     "flexible_load": 1.5,
 }
 
+DEVICE_KEYWORDS: Dict[str, List[str]] = {
+    "ev_charger": ["ev", "charger"],
+    "washing_machine": ["washing", "washer", "laundry"],
+    "dishwasher": ["dishwasher", "dish washer"],
+    "hvac": ["hvac", "air", "chiller", "heat pump", "ahu", "ventilation"],
+    "water_heater": ["water heater", "boiler", "geyser", "immersion"],
+    "flexible_load": [],
+}
+
 FLEXIBILITY_WEIGHT: Dict[str, float] = {
     "low": 0.9,
     "medium": 1.0,
@@ -93,6 +102,14 @@ def _format_time(dt: datetime) -> str:
 def _compute_savings(power_kw: float, duration_hours: float, baseline_intensity: float, planned_intensity: float) -> float:
     delta = max(baseline_intensity - planned_intensity, 0.0)
     return round((power_kw * duration_hours * delta) / 1000.0, 3)
+
+
+def device_matches_name(device_type: str, asset_name: str) -> bool:
+    keywords = DEVICE_KEYWORDS.get(device_type, [])
+    if not keywords:
+        return True
+    normalized = (asset_name or "").lower()
+    return any(keyword in normalized for keyword in keywords)
 
 
 def _candidate_windows(

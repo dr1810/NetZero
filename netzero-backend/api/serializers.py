@@ -3,7 +3,7 @@ from rest_framework import serializers
 from .models import BuildingProfile, FlexibleAsset
 from .models import OperationalSchedule
 from rest_framework import serializers
-from .models import CarbonPreference, NotificationEvent
+from .models import CarbonPreference, NotificationEvent, PlannerRecommendation
 from .services.postcode_region import normalize_postcode, validate_postcode_format
 from datetime import time
 
@@ -180,3 +180,42 @@ class EnergyPlannerRequestSerializer(serializers.Serializer):
             )
 
         return data
+
+
+class PlannerRecommendationActionSerializer(serializers.Serializer):
+    building_id = serializers.IntegerField()
+    device_type = serializers.CharField(max_length=32)
+    duration_hours = serializers.FloatField(min_value=0.5, max_value=12)
+    earliest_start = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    latest_finish = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    recommended_start = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    recommended_end = serializers.TimeField(format="%H:%M", input_formats=["%H:%M"])
+    flexibility_level = serializers.ChoiceField(choices=["low", "medium", "high"], required=False, default="medium")
+    carbon_intensity = serializers.FloatField(min_value=0)
+    estimated_savings_kg = serializers.FloatField(min_value=0)
+    alternatives = serializers.ListField(child=serializers.DictField(), required=False, default=list)
+
+
+class PlannerRecommendationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlannerRecommendation
+        fields = [
+            "id",
+            "building",
+            "device_type",
+            "flexibility_level",
+            "duration_hours",
+            "earliest_start",
+            "latest_finish",
+            "recommended_start_at",
+            "recommended_end_at",
+            "carbon_intensity",
+            "estimated_savings_kg",
+            "alternatives",
+            "action_type",
+            "status",
+            "scheduled_for",
+            "executed_at",
+            "execution_result",
+            "created_at",
+        ]

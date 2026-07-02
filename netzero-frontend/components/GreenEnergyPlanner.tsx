@@ -1,17 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BuildingProfile,
   EnergyPlannerAlternative,
   EnergyPlannerRequest,
   EnergyPlannerResponse,
+  fetchBuildingSchedule,
   planGreenEnergy,
+  savePlannerRecommendation,
+  schedulePlannerModulation,
 } from "@/lib/api";
 import { Leaf, Loader2, Sparkles } from "lucide-react";
 
 interface GreenEnergyPlannerProps {
   buildings: BuildingProfile[];
+  preferredBuildingId?: number | null;
 }
 
 const DEVICE_OPTIONS: Array<{ value: EnergyPlannerRequest["device_type"]; label: string }> = [
@@ -29,7 +34,8 @@ function bandClasses(band: EnergyPlannerAlternative["band"]) {
   return "border-rose-200 bg-rose-50 text-rose-800";
 }
 
-export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProps) {
+export default function GreenEnergyPlanner({ buildings, preferredBuildingId = null }: GreenEnergyPlannerProps) {
+  const router = useRouter();
   const [form, setForm] = useState<EnergyPlannerRequest>({
     building_id: buildings[0]?.id,
     device_type: "washing_machine",
@@ -39,14 +45,20 @@ export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProp
     flexibility_level: "medium",
   });
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<"schedule" | "modulation" | "save" | "scheduleFuture" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<EnergyPlannerResponse | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    if (preferredBuildingId && form.building_id !== preferredBuildingId) {
+      setForm((prev) => ({ ...prev, building_id: preferredBuildingId }));
+      return;
+    }
     if (!form.building_id && buildings[0]?.id) {
       setForm((prev) => ({ ...prev, building_id: buildings[0].id }));
     }
-  }, [buildings, form.building_id]);
+  }, [buildings, form.building_id, preferredBuildingId]);
 
   const updateField = <K extends keyof EnergyPlannerRequest>(key: K, value: EnergyPlannerRequest[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -57,6 +69,7 @@ export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProp
     try {
       setLoading(true);
       setError(null);
+      setActionMessage(null);
       const response = await planGreenEnergy(form);
       setResult(response);
     } catch (err: unknown) {
@@ -64,6 +77,109 @@ export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProp
       setResult(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const scheduleWeights = () => {
+    const flexibility = form.flexibility_level ?? "medium";
+    if (flexibility === "high") {
+      return { carbonWeight: 0.65, costWeight: 0.2, comfortWeight: 0.15 };
+    }
+    if (flexibility === "low") {
+      return { carbonWeight: 0.45, costWeight: 0.2, comfortWeight: 0.35 };
+    }
+    return { carbonWeight: 0.55, costWeight: 0.2, comfortWeight: 0.25 };
+  };
+
+  const plannerActionPayload = () => {
+    if (!result || !form.building_id) return null;
+    return {
+      building_id: form.building_id,
+      device_type: result.device_type,
+      duration_hours: form.duration_hours,
+      earliest_start: form.earliest_start,
+      latest_finish: form.latest_finish,
+      recommended_start: result.recommended_start,
+      recommended_end: result.recommended_end,
+      flexibility_level: result.flexibility_level,
+      carbon_intensity: result.carbon_intensity,
+      estimated_savings_kg: result.estimated_savings_kg,
+      alternatives: result.alternatives,
+    };
+  };
+
+  const handleScheduleAction = async () => {
+    if (!result) return;
+    try {
+      setActionLoading("schedule");
+      setActionMessage(null);
+      const weights = scheduleWeights();
+      await fetchBuildingSchedule(result.building_id, weights);
+      const params = new URLSearchParams({
+        tab: "schedules",
+        plannerStart: result.recommended_start,
+        plannerEnd: result.recommended_end,
+        plannerDevice: result.device_type,
+        plannerCarbon: String(result.carbon_intensity),
+        plannerSavings: String(result.estimated_savings_kg),
+        carbonWeight: String(weights.carbonWeight),
+        costWeight: String(weights.costWeight),
+        comfortWeight: String(weights.comfortWeight),
+      });
+      router.push(`/dashboard/buildings/${result.building_id}?${params.toString()}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to generate pre-filled schedule.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleModulationAction = async () => {
+    if (!result) return;
+    setActionLoading("modulation");
+    setActionMessage(null);
+    const params = new URLSearchParams({
+      buildingId: String(result.building_id),
+      plannerStart: result.recommended_start,
+      plannerEnd: result.recommended_end,
+      plannerDevice: result.device_type,
+      plannerCarbon: String(result.carbon_intensity),
+      plannerSavings: String(result.estimated_savings_kg),
+    });
+    router.push(`/dashboard/carbon?${params.toString()}`);
+  };
+
+  const handleSaveRecommendation = async () => {
+    const payload = plannerActionPayload();
+    if (!payload) return;
+    try {
+      setActionLoading("save");
+      setError(null);
+      setActionMessage(null);
+      await savePlannerRecommendation(payload);
+      setActionMessage("Planner recommendation saved for later review.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save planner recommendation.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleScheduleFutureModulation = async () => {
+    const payload = plannerActionPayload();
+    if (!payload) return;
+    try {
+      setActionLoading("scheduleFuture");
+      setError(null);
+      setActionMessage(null);
+      const response = await schedulePlannerModulation(payload);
+      const recommendation = response && typeof response === "object" ? (response as { recommendation?: { scheduled_for?: string | null } }).recommendation : undefined;
+      const scheduledFor = recommendation?.scheduled_for ? new Date(recommendation.scheduled_for).toLocaleString() : payload.recommended_start;
+      setActionMessage(`Scheduled future modulation check for ${scheduledFor}.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to schedule future modulation.");
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -179,6 +295,7 @@ export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProp
           </div>
 
           {error && <p className="sm:col-span-2 text-sm text-rose-600">{error}</p>}
+          {actionMessage && <p className="sm:col-span-2 text-sm text-emerald-700">{actionMessage}</p>}
         </form>
 
         <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
@@ -200,6 +317,44 @@ export default function GreenEnergyPlanner({ buildings }: GreenEnergyPlannerProp
                   Estimated savings: <span className="font-semibold text-emerald-700">{result.estimated_savings_kg.toFixed(3)} kg CO₂</span>
                 </div>
                 <div className="mt-1 text-xs text-slate-500">Building {result.building_postcode} • Flexibility {result.flexibility_level}</div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSaveRecommendation}
+                    disabled={actionLoading !== null}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {actionLoading === "save" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Save Recommendation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleScheduleAction}
+                    disabled={actionLoading !== null}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-60"
+                  >
+                    {actionLoading === "schedule" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Create Pre-Filled Schedule
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleScheduleFutureModulation}
+                    disabled={actionLoading !== null}
+                    className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-60"
+                  >
+                    {actionLoading === "scheduleFuture" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Schedule Future Modulation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleModulationAction}
+                    disabled={actionLoading !== null}
+                    className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {actionLoading === "modulation" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    Open Modulation Controls
+                  </button>
+                </div>
               </div>
 
               <div>

@@ -24,12 +24,26 @@ export default function BuildingDetail() {
   const id = params?.id as string | undefined;
   const numericId = id ? Number(id) : NaN;
   const initialTab = searchParams?.get("tab") === "schedules" ? "schedules" : "overview";
+  const plannerStart = searchParams?.get("plannerStart") || "";
+  const plannerEnd = searchParams?.get("plannerEnd") || "";
+  const plannerDevice = searchParams?.get("plannerDevice") || "";
+  const plannerCarbon = searchParams?.get("plannerCarbon") || "";
+  const plannerSavings = searchParams?.get("plannerSavings") || "";
+  const carbonWeightParam = searchParams?.get("carbonWeight");
+  const costWeightParam = searchParams?.get("costWeight");
+  const comfortWeightParam = searchParams?.get("comfortWeight");
   const [building, setBuilding] = useState<BuildingDetailData | null>(null);
   const [schedule, setSchedule] = useState<BuildingSchedule | null>(null);
   const [loading, setLoading] = useState(true);
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [tab, setTab] = useState<"overview" | "schedules">(initialTab);
+
+  const scheduleWeights = {
+    carbonWeight: carbonWeightParam ? Number(carbonWeightParam) : undefined,
+    costWeight: costWeightParam ? Number(costWeightParam) : undefined,
+    comfortWeight: comfortWeightParam ? Number(comfortWeightParam) : undefined,
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -40,7 +54,7 @@ export default function BuildingDetail() {
         if (tab === 'schedules') {
           try {
             setScheduleLoading(true);
-            const s = await fetchBuildingSchedule(numericId);
+            const s = await fetchBuildingSchedule(numericId, scheduleWeights);
             setSchedule(s);
             setScheduleError(null);
           } finally {
@@ -56,7 +70,7 @@ export default function BuildingDetail() {
       }
     };
     load();
-  }, [numericId, tab]);
+  }, [numericId, tab, carbonWeightParam, costWeightParam, comfortWeightParam]);
 
   if (loading) return (
     <div className="flex min-h-[40vh] items-center justify-center">
@@ -105,6 +119,18 @@ export default function BuildingDetail() {
 
       {tab === 'schedules' && (
         <div className="rounded-xl border border-slate-200 bg-white p-6">
+          {plannerStart && plannerEnd && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <div className="font-semibold">Planner handoff applied</div>
+              <div className="mt-1">
+                Recommended window for {plannerDevice.replaceAll("_", " ")}: {plannerStart} - {plannerEnd}
+              </div>
+              <div className="mt-1 text-xs text-emerald-700">
+                Forecast intensity {plannerCarbon || "-"} gCO₂/kWh • Estimated savings {plannerSavings || "-"} kg CO₂.
+                This schedule view was generated using planner-biased optimization weights.
+              </div>
+            </div>
+          )}
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-bold">Generated Schedule</h2>
             <div className="flex items-center gap-2">
@@ -114,7 +140,7 @@ export default function BuildingDetail() {
                   setScheduleError(null);
                   try {
                     setScheduleLoading(true);
-                    const s = await fetchBuildingSchedule(numericId);
+                    const s = await fetchBuildingSchedule(numericId, scheduleWeights);
                     setSchedule(s);
                   } catch (err: unknown) {
                     console.error('Failed to generate schedule', err);

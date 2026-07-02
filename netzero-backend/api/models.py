@@ -267,3 +267,54 @@ class ModulationEvent(models.Model):
     
     def __str__(self):
         return f"{self.asset.name} {self.action_type} @ {self.triggered_at.isoformat()}"
+
+
+class PlannerRecommendation(models.Model):
+    ACTION_TYPES = [
+        ("SAVE_ONLY", "Save Only"),
+        ("SCHEDULE_MODULATION", "Schedule Modulation"),
+    ]
+
+    STATUS_TYPES = [
+        ("SAVED", "Saved"),
+        ("PENDING", "Pending Execution"),
+        ("EXECUTED", "Executed"),
+        ("FAILED", "Failed"),
+    ]
+
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="planner_recommendations",
+    )
+    building = models.ForeignKey(
+        BuildingProfile,
+        on_delete=models.CASCADE,
+        related_name="planner_recommendations",
+    )
+    device_type = models.CharField(max_length=32)
+    flexibility_level = models.CharField(max_length=16, default="medium")
+    duration_hours = models.FloatField(validators=[MinValueValidator(0.5)])
+    earliest_start = models.TimeField()
+    latest_finish = models.TimeField()
+    recommended_start_at = models.DateTimeField()
+    recommended_end_at = models.DateTimeField()
+    carbon_intensity = models.FloatField()
+    estimated_savings_kg = models.FloatField(default=0.0)
+    alternatives = models.JSONField(default=list, blank=True)
+    action_type = models.CharField(max_length=24, choices=ACTION_TYPES, default="SAVE_ONLY")
+    status = models.CharField(max_length=16, choices=STATUS_TYPES, default="SAVED")
+    scheduled_for = models.DateTimeField(null=True, blank=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    execution_result = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "scheduled_for"], name="idx_planner_status_schedule"),
+            models.Index(fields=["building", "created_at"], name="idx_planner_building_created"),
+        ]
+
+    def __str__(self):
+        return f"PlannerRecommendation({self.device_type}, {self.building.postcode}, {self.action_type})"

@@ -712,6 +712,41 @@ export interface EnergyPlannerResponse {
   alternatives: EnergyPlannerAlternative[];
 }
 
+export interface PlannerRecommendationRecord {
+  id: number;
+  building: number;
+  device_type: string;
+  flexibility_level: 'low' | 'medium' | 'high';
+  duration_hours: number;
+  earliest_start: string;
+  latest_finish: string;
+  recommended_start_at: string;
+  recommended_end_at: string;
+  carbon_intensity: number;
+  estimated_savings_kg: number;
+  alternatives: EnergyPlannerAlternative[];
+  action_type: 'SAVE_ONLY' | 'SCHEDULE_MODULATION';
+  status: 'SAVED' | 'PENDING' | 'EXECUTED' | 'FAILED';
+  scheduled_for?: string | null;
+  executed_at?: string | null;
+  execution_result?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface PlannerRecommendationActionPayload {
+  building_id: number;
+  device_type: string;
+  duration_hours: number;
+  earliest_start: string;
+  latest_finish: string;
+  recommended_start: string;
+  recommended_end: string;
+  flexibility_level: 'low' | 'medium' | 'high';
+  carbon_intensity: number;
+  estimated_savings_kg: number;
+  alternatives: EnergyPlannerAlternative[];
+}
+
 export interface EnergyPlannerRequest {
   building_id?: number;
   device_type: 'ev_charger' | 'washing_machine' | 'dishwasher' | 'hvac' | 'water_heater' | 'flexible_load';
@@ -750,6 +785,44 @@ export async function planGreenEnergy(payload: EnergyPlannerRequest): Promise<En
   }
 
   return bodyJson as unknown as EnergyPlannerResponse;
+}
+
+async function postPlannerRecommendation(path: string, payload: PlannerRecommendationActionPayload) {
+  const res = await authFetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  let bodyText = '';
+  try {
+    bodyText = await res.text();
+  } catch {}
+
+  let bodyJson: Record<string, unknown> | null = null;
+  try {
+    bodyJson = JSON.parse(bodyText || 'null');
+  } catch {
+    bodyJson = null;
+  }
+
+  if (!res.ok) {
+    const message =
+      (isRecord(bodyJson) && typeof bodyJson.detail === 'string' && bodyJson.detail) ||
+      bodyText ||
+      `Planner action failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  return bodyJson;
+}
+
+export async function savePlannerRecommendation(payload: PlannerRecommendationActionPayload) {
+  return postPlannerRecommendation('/energy-planner/save/', payload);
+}
+
+export async function schedulePlannerModulation(payload: PlannerRecommendationActionPayload) {
+  return postPlannerRecommendation('/energy-planner/schedule-modulation/', payload);
 }
 
 /**
