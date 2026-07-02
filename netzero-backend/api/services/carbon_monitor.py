@@ -17,6 +17,90 @@ ESO_BASE_URL = "https://api.carbonintensity.org.uk"
 CACHE_TIMEOUT = 300  # 5 minutes
 
 
+def _normalize_generation_mix(generation_mix: Any) -> List[Dict[str, Any]]:
+    if not isinstance(generation_mix, list):
+        return []
+    normalized: List[Dict[str, Any]] = []
+    for item in generation_mix:
+        if not isinstance(item, dict):
+            continue
+        fuel = str(item.get("fuel") or "").strip().lower()
+        perc = item.get("perc")
+        try:
+            perc_value = float(perc)
+        except (TypeError, ValueError):
+            continue
+        if not fuel:
+            continue
+        normalized.append({"fuel": fuel, "perc": perc_value})
+    return normalized
+
+
+def _compute_generation_summary(generation_mix: List[Dict[str, Any]]) -> Dict[str, Any]:
+    fuel_pct = {entry["fuel"]: float(entry["perc"]) for entry in generation_mix}
+    renewable_fuels = {
+        "wind",
+        "solar",
+        "hydro",
+        "biomass",
+        "other",
+    }
+    fossil_fuels = {
+        "coal",
+        "gas",
+        "oil",
+    }
+    renewable_share = sum(fuel_pct.get(fuel, 0.0) for fuel in renewable_fuels)
+    fossil_share = sum(fuel_pct.get(fuel, 0.0) for fuel in fossil_fuels)
+    green_score = min(max(round(renewable_share), 0), 100)
+    if green_score >= 80:
+        green_band = "excellent"
+    elif green_score >= 60:
+        green_band = "good"
+    elif green_score >= 40:
+        green_band = "moderate"
+    else:
+        green_band = "poor"
+
+    return {
+        "generation_mix": generation_mix,
+        "fuel_percentages": fuel_pct,
+        "renewable_share": round(renewable_share, 2),
+        "fossil_share": round(fossil_share, 2),
+        "green_score": green_score,
+        "green_score_band": green_band,
+    }
+
+
+def _get_current_generation_mix(region_id: str) -> List[Dict[str, Any]]:
+    cache_key = f"carbon_intensity_generation_mix_{region_id}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        url = f"{ESO_BASE_URL}/regional/generation/regionid/{region_id}"
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        payload = response.json() or {}
+        data = payload.get("data") or []
+        if not data:
+            return []
+        region_data = data[0]
+        points = region_data.get("data") or []
+        if not points:
+            return []
+        generation_mix = _normalize_generation_mix(points[0].get("generationmix") or [])
+        cache.set(cache_key, generation_mix, CACHE_TIMEOUT)
+        return generation_mix
+    except requests.RequestException:
+        logger.exception("Failed to fetch generation mix for region %s", region_id)
+        return []
+    except (KeyError, IndexError, TypeError, ValueError):
+        logger.exception("Failed to parse generation mix for region %s", region_id)
+        return []
+
+
 def get_current_carbon_intensity(region_id: str) -> Optional[Dict[str, Any]]:
     """
     Fetch current carbon intensity for a given region.
@@ -59,6 +143,8 @@ def get_current_carbon_intensity(region_id: str) -> Optional[Dict[str, Any]]:
             "region_id": region_id,
             "source": "eso_realtime"
         }
+        generation_mix = _get_current_generation_mix(region_id)
+        result.update(_compute_generation_summary(generation_mix))
         
         cache.set(cache_key, result, CACHE_TIMEOUT)
         logger.info(f"Current carbon intensity for {region_id}: {result['intensity']} gCO2/kWh")
@@ -101,7 +187,8 @@ def _fallback_to_stored_forecast(region_id: str) -> Optional[Dict[str, Any]]:
                 "timestamp": forecast.forecast_time,
                 "index": _classify_intensity(forecast.intensity_forecast),
                 "region_id": region_id,
-                "source": "stored_forecast"
+                "source": "stored_forecast",
+                **_compute_generation_summary(_normalize_generation_mix(forecast.generation_mix)),
             }
         
         logger.warning(f"No stored forecast available for region {region_id}")
@@ -213,7 +300,13 @@ def should_trigger_modulation(building_id: int) -> tuple[bool, Optional[Dict[str
             "index": current["index"],
             "region_id": current["region_id"],
             "timestamp": current["timestamp"],
-            "source": current["source"]
+            "source": current["source"],
+            "generation_mix": current.get("generation_mix", []),
+            "fuel_percentages": current.get("fuel_percentages", {}),
+            "renewable_share": current.get("renewable_share", 0.0),
+            "fossil_share": current.get("fossil_share", 0.0),
+            "green_score": current.get("green_score", 0),
+            "green_score_band": current.get("green_score_band", "poor"),
         }
         
         logger.info(

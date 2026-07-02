@@ -71,7 +71,7 @@ def evaluate_building_modulation(
         decisions = []
         
         for asset in assets:
-            decision = _evaluate_asset(asset, current_intensity, threshold, should_modulate)
+            decision = _evaluate_asset(asset, carbon_data, should_modulate)
             if decision:
                 decisions.append(decision)
         
@@ -89,8 +89,7 @@ def evaluate_building_modulation(
 
 def _evaluate_asset(
     asset,
-    current_intensity: float,
-    threshold: float,
+    carbon_data: Dict[str, Any],
     should_modulate: bool
 ) -> Optional[ModulationDecision]:
     """
@@ -100,6 +99,8 @@ def _evaluate_asset(
     """
     current_state = asset.is_modulated_active
     criticality = asset.criticality_classification
+    current_intensity = float(carbon_data.get("current_intensity", 0.0) or 0.0)
+    threshold = float(carbon_data.get("threshold", 0.0) or 0.0)
     
     # Decide new state based on carbon intensity
     if should_modulate:
@@ -113,9 +114,11 @@ def _evaluate_asset(
             if strategy is None:
                 return None
             action = strategy["action"]
-            reason = (
-                f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) exceeds "
-                f"threshold ({threshold:.1f} gCO2/kWh). Applying {strategy['label']} strategy."
+            reason = _build_explainable_reason(
+                carbon_data=carbon_data,
+                threshold=threshold,
+                strategy_label=strategy["label"],
+                is_restore=False,
             )
             estimated_saved = _estimate_carbon_savings(
                 asset,
@@ -135,9 +138,11 @@ def _evaluate_asset(
     else:
         # Carbon is low - restore all modulated assets to normal operation.
         if current_state:
-            reason = (
-                f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) below "
-                f"threshold ({threshold:.1f} gCO2/kWh). Restoring normal operation."
+            reason = _build_explainable_reason(
+                carbon_data=carbon_data,
+                threshold=threshold,
+                strategy_label="restore normal operation",
+                is_restore=True,
             )
             
             return ModulationDecision(
@@ -222,6 +227,36 @@ def _resolve_modulation_strategy(asset) -> Optional[Dict[str, Any]]:
         "effectiveness": effectiveness,
         "label": "standard modulation",
     }
+
+
+def _build_explainable_reason(
+    carbon_data: Dict[str, Any],
+    threshold: float,
+    strategy_label: str,
+    is_restore: bool,
+) -> str:
+    current_intensity = float(carbon_data.get("current_intensity", 0.0) or 0.0)
+    fuel_percentages = carbon_data.get("fuel_percentages") or {}
+    gas_share = float(fuel_percentages.get("gas", 0.0) or 0.0)
+    wind_share = float(fuel_percentages.get("wind", 0.0) or 0.0)
+    renewable_share = float(carbon_data.get("renewable_share", 0.0) or 0.0)
+
+    if is_restore:
+        lead = (
+            f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) is below threshold "
+            f"({threshold:.1f} gCO2/kWh). Restoring normal operation."
+        )
+    else:
+        lead = (
+            f"Carbon intensity ({current_intensity:.1f} gCO2/kWh) exceeded threshold "
+            f"({threshold:.1f} gCO2/kWh). Applying {strategy_label}."
+        )
+
+    context = (
+        f" Generation mix context: gas {gas_share:.1f}%, wind {wind_share:.1f}%, "
+        f"renewables {renewable_share:.1f}%."
+    )
+    return lead + context
 
 
 def _estimate_carbon_savings(asset, current_intensity: float, effectiveness_factor: float) -> float:

@@ -39,6 +39,7 @@ export default function CarbonMonitoringPage() {
   const [assetActionId, setAssetActionId] = useState<number | null>(null);
   const [dryRunResult, setDryRunResult] = useState<TriggerModulationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedReasonEventId, setExpandedReasonEventId] = useState<number | null>(null);
 
   const loadBuildings = useCallback(async () => {
     try {
@@ -185,6 +186,28 @@ export default function CarbonMonitoringPage() {
     (sum, e) => sum + (e.estimated_carbon_saved_kg || 0),
     0
   );
+  const topMix = (carbonData?.generation_mix || [])
+    .slice()
+    .sort((a, b) => b.perc - a.perc)
+    .slice(0, 6);
+
+  const parseExplainability = (event: ModulationEvent) => {
+    const reason = event.reason || "";
+    const intensityMatch = reason.match(/Carbon intensity \(([\d.]+) gCO2\/kWh\)/i);
+    const thresholdMatch = reason.match(/threshold \(([\d.]+) gCO2\/kWh\)/i);
+    const gasMatch = reason.match(/gas ([\d.]+)%/i);
+    const windMatch = reason.match(/wind ([\d.]+)%/i);
+    const renewableMatch = reason.match(/renewables ([\d.]+)%/i);
+
+    return {
+      summary: reason.split(".")[0] || "Modulation decision from carbon-aware scheduler.",
+      intensity: intensityMatch ? Number(intensityMatch[1]) : event.carbon_intensity_at_time,
+      threshold: thresholdMatch ? Number(thresholdMatch[1]) : event.carbon_threshold,
+      gas: gasMatch ? Number(gasMatch[1]) : null,
+      wind: windMatch ? Number(windMatch[1]) : null,
+      renewables: renewableMatch ? Number(renewableMatch[1]) : null,
+    };
+  };
 
   if (loading) {
     return (
@@ -369,6 +392,41 @@ export default function CarbonMonitoringPage() {
         )}
       </div>
 
+      {/* Energy Mix Dashboard */}
+      {carbonData && (
+        <div className="mb-6 bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-xl font-semibold mb-4">Current Energy Mix (UK Grid)</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100">
+              <div className="text-xs text-emerald-700 uppercase tracking-wide">Green Energy Score</div>
+              <div className="text-3xl font-bold text-emerald-800">{carbonData.green_score}/100</div>
+              <div className="text-sm text-emerald-700 capitalize">{carbonData.green_score_band}</div>
+            </div>
+            <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
+              <div className="text-xs text-blue-700 uppercase tracking-wide">Renewables</div>
+              <div className="text-3xl font-bold text-blue-800">{carbonData.renewable_share.toFixed(1)}%</div>
+            </div>
+            <div className="p-4 rounded-lg bg-orange-50 border border-orange-100">
+              <div className="text-xs text-orange-700 uppercase tracking-wide">Fossil</div>
+              <div className="text-3xl font-bold text-orange-800">{carbonData.fossil_share.toFixed(1)}%</div>
+            </div>
+          </div>
+
+          {topMix.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {topMix.map((mix) => (
+                <div key={mix.fuel} className="p-3 border rounded-lg bg-gray-50">
+                  <div className="text-sm font-medium capitalize">{mix.fuel}</div>
+                  <div className="text-lg font-bold">{mix.perc.toFixed(1)}%</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">Generation mix currently unavailable.</p>
+          )}
+        </div>
+      )}
+
       {/* Registered Assets */}
       <div className="mb-6 bg-white rounded-lg shadow-md p-6">
         <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
@@ -512,6 +570,45 @@ export default function CarbonMonitoringPage() {
                     {event.carbon_intensity_index}) • Threshold:{" "}
                     {event.carbon_threshold.toFixed(0)}
                   </div>
+                  {event.reason && (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedReasonEventId(
+                            expandedReasonEventId === event.id ? null : event.id
+                          )
+                        }
+                        className="text-xs font-semibold text-blue-700 hover:text-blue-800"
+                      >
+                        {expandedReasonEventId === event.id ? "Hide why" : "Why was this action taken?"}
+                      </button>
+
+                      {expandedReasonEventId === event.id && (
+                        <div className="mt-2 p-3 border border-blue-100 bg-blue-50 rounded-lg text-sm text-slate-700 space-y-1">
+                          {(() => {
+                            const details = parseExplainability(event);
+                            return (
+                              <>
+                                <div className="font-medium text-slate-800">Reason Summary</div>
+                                <div>{details.summary}</div>
+                                <div className="pt-1">Carbon intensity: {details.intensity.toFixed(1)} gCO₂/kWh</div>
+                                <div>Threshold: {details.threshold.toFixed(1)} gCO₂/kWh</div>
+                                {details.gas !== null && <div>Gas generation: {details.gas.toFixed(1)}%</div>}
+                                {details.wind !== null && <div>Wind generation: {details.wind.toFixed(1)}%</div>}
+                                {details.renewables !== null && <div>Renewable share: {details.renewables.toFixed(1)}%</div>}
+                                {event.estimated_carbon_saved_kg !== null && (
+                                  <div className="font-semibold text-green-700">
+                                    Estimated saving: {event.estimated_carbon_saved_kg.toFixed(3)} kg CO₂
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {event.estimated_carbon_saved_kg !== null && (
                     <div className="text-sm text-green-600 font-medium mt-1">
                       Saved: {event.estimated_carbon_saved_kg.toFixed(3)} kg CO₂

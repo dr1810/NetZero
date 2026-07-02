@@ -33,6 +33,8 @@ class CarbonMonitoringAPITest(APITestCase):
         self.assertEqual(response.data["should_modulate"], False)
         self.assertIn("current_intensity", response.data)
         self.assertIn("threshold", response.data)
+        self.assertIn("generation_mix", response.data)
+        self.assertIn("green_score", response.data)
 
     @patch("api.services.carbon_monitor.get_current_carbon_intensity")
     def test_trigger_modulation_modulates_registered_assets_without_preference(self, mock_current):
@@ -67,6 +69,10 @@ class CarbonMonitoringAPITest(APITestCase):
 
         asset.refresh_from_db()
         self.assertTrue(asset.is_modulated_active)
+        event = ModulationEvent.objects.filter(asset=asset).latest("id")
+        self.assertIn("gas", event.reason.lower())
+        self.assertIn("wind", event.reason.lower())
+        self.assertIn("renewables", event.reason.lower())
 
     @patch("api.services.carbon_monitor.get_current_carbon_intensity")
     def test_trigger_modulation_rejects_building_not_owned_by_user(self, mock_current):

@@ -590,6 +590,12 @@ export interface CarbonIntensityResponse {
   source: string;
   threshold: number;
   should_modulate: boolean;
+  generation_mix: Array<{ fuel: string; perc: number }>;
+  fuel_percentages: Record<string, number>;
+  renewable_share: number;
+  fossil_share: number;
+  green_score: number;
+  green_score_band: 'excellent' | 'good' | 'moderate' | 'poor';
 }
 
 export interface ModulationEvent {
@@ -603,6 +609,7 @@ export interface ModulationEvent {
   carbon_intensity_at_time: number;
   carbon_threshold: number;
   carbon_intensity_index: string;
+  reason: string;
   estimated_carbon_saved_kg: number | null;
 }
 
@@ -616,6 +623,7 @@ export interface ModulationEventsResponse {
 export interface TriggerModulationResponse {
   status: 'success' | 'dry_run' | 'no_action' | 'skipped' | 'error';
   message?: string;
+  carbon_data?: CarbonIntensityResponse;
   applied_count?: number;
   decisions?: Array<{
     asset_id: number;

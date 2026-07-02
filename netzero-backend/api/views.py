@@ -871,7 +871,13 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                             "region_id": current["region_id"],
                             "timestamp": current["timestamp"],
                             "source": current["source"],
-                            "should_modulate": False
+                            "should_modulate": False,
+                            "generation_mix": current.get("generation_mix", []),
+                            "fuel_percentages": current.get("fuel_percentages", {}),
+                            "renewable_share": current.get("renewable_share", 0.0),
+                            "fossil_share": current.get("fossil_share", 0.0),
+                            "green_score": current.get("green_score", 0),
+                            "green_score_band": current.get("green_score_band", "poor"),
                         })
 
                     return Response({
@@ -881,7 +887,13 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                         "region_id": building.grid_zone_id or "UNKNOWN",
                         "timestamp": timezone.now(),
                         "source": "unavailable",
-                        "should_modulate": False
+                        "should_modulate": False,
+                        "generation_mix": [],
+                        "fuel_percentages": {},
+                        "renewable_share": 0.0,
+                        "fossil_share": 0.0,
+                        "green_score": 0,
+                        "green_score_band": "poor",
                     })
 
                 return Response({
@@ -894,7 +906,13 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "region_id": building.grid_zone_id,
                     "timestamp": timezone.now(),
                     "source": "unavailable",
-                    "should_modulate": False
+                    "should_modulate": False,
+                    "generation_mix": [],
+                    "fuel_percentages": {},
+                    "renewable_share": 0.0,
+                    "fossil_share": 0.0,
+                    "green_score": 0,
+                    "green_score_band": "poor",
                 })
             
             return Response({
@@ -904,7 +922,13 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 "region_id": carbon_data["region_id"],
                 "timestamp": carbon_data["timestamp"],
                 "source": carbon_data["source"],
-                "should_modulate": should_modulate
+                "should_modulate": should_modulate,
+                "generation_mix": carbon_data.get("generation_mix", []),
+                "fuel_percentages": carbon_data.get("fuel_percentages", {}),
+                "renewable_share": carbon_data.get("renewable_share", 0.0),
+                "fossil_share": carbon_data.get("fossil_share", 0.0),
+                "green_score": carbon_data.get("green_score", 0),
+                "green_score_band": carbon_data.get("green_score_band", "poor"),
             })
             
         except BuildingProfile.DoesNotExist:
@@ -929,6 +953,17 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
         """
         from api.models import ModulationEvent
         from rest_framework.pagination import PageNumberPagination
+
+        def classify_intensity(intensity: float) -> str:
+            if intensity < 100:
+                return "very low"
+            if intensity < 200:
+                return "low"
+            if intensity < 300:
+                return "moderate"
+            if intensity < 400:
+                return "high"
+            return "very high"
         
         try:
             building = BuildingProfile.objects.get(id=pk, owner=request.user)
@@ -958,6 +993,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "action_type": event.action_type,
                     "trigger_type": event.trigger_type,
                     "carbon_intensity_at_time": event.carbon_intensity_at_time,
+                    "carbon_intensity_index": classify_intensity(event.carbon_intensity_at_time),
                     "carbon_threshold": event.carbon_threshold,
                     "previous_state": event.previous_state,
                     "new_state": event.new_state,
@@ -1050,6 +1086,12 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "region_id": building.grid_zone_id,
                     "timestamp": timezone.now(),
                     "source": "unavailable",
+                    "generation_mix": [],
+                    "fuel_percentages": {},
+                    "renewable_share": 0.0,
+                    "fossil_share": 0.0,
+                    "green_score": 0,
+                    "green_score_band": "poor",
                 }
 
             if carbon_data["source"] == "unavailable":
