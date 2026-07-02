@@ -27,6 +27,17 @@ import {
   RefreshCw,
 } from "lucide-react";
 
+const CARBON_DEBUG = process.env.NEXT_PUBLIC_CARBON_DEBUG === "true";
+
+function carbonDebug(message: string, payload?: unknown) {
+  if (!CARBON_DEBUG) return;
+  if (typeof payload === "undefined") {
+    console.debug(message);
+    return;
+  }
+  console.debug(message, payload);
+}
+
 export default function CarbonMonitoringPage() {
   const [buildings, setBuildings] = useState<BuildingProfile[]>([]);
   const [selectedBuilding, setSelectedBuilding] = useState<number | null>(null);
@@ -67,6 +78,13 @@ export default function CarbonMonitoringPage() {
         fetchAssets(),
       ]);
 
+      carbonDebug("[CarbonPage] loadCarbonData raw results", {
+        selectedBuilding,
+        carbonRes,
+        eventsCount: eventsRes?.results?.length ?? 0,
+        assetsCount: assetsRes?.length ?? 0,
+      });
+
       setCarbonData(carbonRes);
       setEvents(eventsRes.results);
       setAssets(assetsRes.filter((a) => a.building === selectedBuilding));
@@ -95,6 +113,17 @@ export default function CarbonMonitoringPage() {
       setRefreshing(false);
     }
   }, [selectedBuilding]);
+
+  useEffect(() => {
+    if (!selectedBuilding) return;
+    carbonDebug("[CarbonPage] render-state update", {
+      selectedBuilding,
+      carbonData,
+      eventsCount: events.length,
+      assetsCount: assets.length,
+      error,
+    });
+  }, [selectedBuilding, carbonData, events.length, assets.length, error]);
 
   const handleTrigger = async (dryRun: boolean) => {
     if (!selectedBuilding) return;

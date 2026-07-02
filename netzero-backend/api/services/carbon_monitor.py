@@ -5,16 +5,152 @@ Fetches real-time and forecasted carbon intensity data from National Grid ESO AP
 Provides caching and fallback mechanisms for reliability.
 """
 import logging
-from datetime import datetime, timedelta
+import os
+from datetime import timedelta
 from typing import Optional, Dict, Any, List
 import requests
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.core.cache import cache
+from api.services.postcode_region import normalize_postcode, extract_outward_code
 
 logger = logging.getLogger(__name__)
 
 ESO_BASE_URL = "https://api.carbonintensity.org.uk"
 CACHE_TIMEOUT = 300  # 5 minutes
+
+
+def _carbon_debug_enabled() -> bool:
+    return os.getenv("NETZERO_CARBON_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _carbon_debug(message: str, *args: Any) -> None:
+    if _carbon_debug_enabled():
+        logger.info(message, *args)
+
+
+def _normalize_postcode_compact(postcode: str) -> str:
+    normalized = normalize_postcode(postcode)
+    return normalized.replace(" ", "")
+
+
+def _postcode_candidates(postcode: str) -> List[str]:
+    full = _normalize_postcode_compact(postcode)
+    outward = extract_outward_code(postcode).replace(" ", "")
+    candidates = [full]
+    if outward and outward not in candidates:
+        candidates.append(outward)
+    return [candidate for candidate in candidates if candidate]
+
+
+def _extract_regional_points(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract regional data points from postcode/regional Carbon Intensity payloads."""
+    raw_data = payload.get("data")
+
+    if isinstance(raw_data, dict):
+        points = raw_data.get("data")
+        return [p for p in points if isinstance(p, dict)] if isinstance(points, list) else []
+
+    if isinstance(raw_data, list) and raw_data:
+        first = raw_data[0]
+        if isinstance(first, dict):
+            nested = first.get("data")
+            if isinstance(nested, list):
+                return [p for p in nested if isinstance(p, dict)]
+        return [p for p in raw_data if isinstance(p, dict)]
+
+    return []
+
+
+def _extract_national_points(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_data = payload.get("data")
+    if not isinstance(raw_data, list):
+        return []
+    return [p for p in raw_data if isinstance(p, dict)]
+
+
+def _request_json(url: str, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
+    _carbon_debug("Carbon API request URL: %s", url)
+    try:
+        response = requests.get(url, timeout=timeout)
+        status_code = getattr(response, "status_code", None)
+        if isinstance(status_code, int) and status_code >= 400:
+            logger.warning(
+                "Carbon API non-2xx response url=%s status=%s body=%s",
+                url,
+                status_code,
+                (response.text or "")[:2000],
+            )
+            response.raise_for_status()
+        payload = response.json() or {}
+        _carbon_debug("Carbon API raw payload url=%s payload=%s", url, str(payload)[:2000])
+        return payload
+    except requests.RequestException as exc:
+        body = ""
+        status_code = "unknown"
+        if getattr(exc, "response", None) is not None:
+            status_code = getattr(exc.response, "status_code", "unknown")
+            body = (getattr(exc.response, "text", "") or "")[:2000]
+        logger.warning(
+            "Carbon API request failed url=%s status=%s error=%s body=%s",
+            url,
+            status_code,
+            exc,
+            body,
+        )
+        return None
+    except (TypeError, ValueError) as exc:
+        logger.warning("Carbon API response parsing failed url=%s error=%s", url, exc)
+        return None
+
+
+def _extract_intensity_fields(point: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    intensity = point.get("intensity") or {}
+    actual = intensity.get("actual")
+    forecast = intensity.get("forecast")
+    value = actual if actual is not None else forecast
+    if value is None:
+        return None
+
+    parsed_timestamp = parse_datetime(str(point.get("from") or ""))
+    if parsed_timestamp is None:
+        parsed_timestamp = timezone.now()
+    elif timezone.is_naive(parsed_timestamp):
+        parsed_timestamp = timezone.make_aware(parsed_timestamp, timezone.get_current_timezone())
+
+    return {
+        "intensity": float(value),
+        "index": intensity.get("index") or _classify_intensity(float(value)),
+        "timestamp": parsed_timestamp,
+    }
+
+
+def _get_current_generation_mix(postcode: str) -> List[Dict[str, Any]]:
+    postcode_key = _normalize_postcode_compact(postcode)
+    cache_key = f"carbon_intensity_generation_mix_postcode_{postcode_key}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    for postcode_candidate in _postcode_candidates(postcode):
+        regional_url = f"{ESO_BASE_URL}/regional/postcode/{postcode_candidate}"
+        payload = _request_json(regional_url)
+        points = _extract_regional_points(payload or {})
+        if points:
+            regional_mix = _normalize_generation_mix(points[0].get("generationmix") or [])
+            if regional_mix:
+                cache.set(cache_key, regional_mix, CACHE_TIMEOUT)
+                return regional_mix
+
+    # Fallback endpoint explicitly requested by user.
+    national_generation_url = f"{ESO_BASE_URL}/generation"
+    national_payload = _request_json(national_generation_url)
+    national_points = _extract_national_points(national_payload or {})
+    if not national_points:
+        return []
+    national_mix = _normalize_generation_mix(national_points[0].get("generationmix") or [])
+    cache.set(cache_key, national_mix, CACHE_TIMEOUT)
+    return national_mix
 
 
 def _normalize_generation_mix(generation_mix: Any) -> List[Dict[str, Any]]:
@@ -72,36 +208,7 @@ def _compute_generation_summary(generation_mix: List[Dict[str, Any]]) -> Dict[st
     }
 
 
-def _get_current_generation_mix(region_id: str) -> List[Dict[str, Any]]:
-    cache_key = f"carbon_intensity_generation_mix_{region_id}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    try:
-        url = f"{ESO_BASE_URL}/regional/generation/regionid/{region_id}"
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        payload = response.json() or {}
-        data = payload.get("data") or []
-        if not data:
-            return []
-        region_data = data[0]
-        points = region_data.get("data") or []
-        if not points:
-            return []
-        generation_mix = _normalize_generation_mix(points[0].get("generationmix") or [])
-        cache.set(cache_key, generation_mix, CACHE_TIMEOUT)
-        return generation_mix
-    except requests.RequestException:
-        logger.exception("Failed to fetch generation mix for region %s", region_id)
-        return []
-    except (KeyError, IndexError, TypeError, ValueError):
-        logger.exception("Failed to parse generation mix for region %s", region_id)
-        return []
-
-
-def get_current_carbon_intensity(region_id: str) -> Optional[Dict[str, Any]]:
+def get_current_carbon_intensity(region_id: Optional[str] = None, postcode: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """
     Fetch current carbon intensity for a given region.
     
@@ -114,48 +221,87 @@ def get_current_carbon_intensity(region_id: str) -> Optional[Dict[str, Any]]:
     
     Returns None on failure.
     """
-    cache_key = f"carbon_intensity_current_{region_id}"
+    normalized_postcode = _normalize_postcode_compact(postcode) if postcode else ""
+    cache_key = (
+        f"carbon_intensity_current_postcode_{normalized_postcode}"
+        if normalized_postcode
+        else f"carbon_intensity_current_region_{region_id or 'unknown'}"
+    )
     cached = cache.get(cache_key)
-    if cached:
-        logger.info(f"Cache hit for current carbon intensity: {region_id}")
+    if cached is not None:
+        _carbon_debug("Carbon intensity cache hit key=%s value=%s", cache_key, cached)
         return cached
     
     try:
-        url = f"{ESO_BASE_URL}/regional/intensity/regionid/{region_id}"
-        logger.info(f"Fetching current carbon intensity: {url}")
-        
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        
-        if not data.get("data"):
-            logger.warning(f"No data returned for region {region_id}")
+        if normalized_postcode:
+            for postcode_candidate in _postcode_candidates(normalized_postcode):
+                regional_url = f"{ESO_BASE_URL}/regional/postcode/{postcode_candidate}"
+                payload = _request_json(regional_url)
+                if payload:
+                    points = _extract_regional_points(payload)
+                    if points:
+                        parsed = _extract_intensity_fields(points[0])
+                        if parsed is not None:
+                            data_container = payload.get("data")
+                            resolved_region = str(region_id or "")
+                            if isinstance(data_container, list) and data_container and isinstance(data_container[0], dict):
+                                resolved_region = str(data_container[0].get("regionid") or data_container[0].get("regionId") or resolved_region)
+
+                            generation_mix = _normalize_generation_mix(points[0].get("generationmix") or [])
+                            if not generation_mix:
+                                generation_mix = _get_current_generation_mix(normalized_postcode)
+
+                            result = {
+                                "intensity": parsed["intensity"],
+                                "timestamp": parsed["timestamp"],
+                                "index": parsed["index"],
+                                "region_id": resolved_region or "UNKNOWN",
+                                "source": "eso_regional_postcode",
+                            }
+                            result.update(_compute_generation_summary(generation_mix))
+                            _carbon_debug(
+                                "Parsed postcode carbon intensity postcode=%s candidate=%s region=%s intensity=%s",
+                                normalized_postcode,
+                                postcode_candidate,
+                                result["region_id"],
+                                result["intensity"],
+                            )
+                            cache.set(cache_key, result, CACHE_TIMEOUT)
+                            return result
+
+        # Explicit fallback endpoint requested by user.
+        national_url = f"{ESO_BASE_URL}/intensity"
+        national_payload = _request_json(national_url)
+        if national_payload:
+            national_points = _extract_national_points(national_payload)
+            if national_points:
+                parsed_national = _extract_intensity_fields(national_points[0])
+                if parsed_national is not None:
+                    generation_mix = _get_current_generation_mix(normalized_postcode) if normalized_postcode else []
+                    result = {
+                        "intensity": parsed_national["intensity"],
+                        "timestamp": parsed_national["timestamp"],
+                        "index": parsed_national["index"],
+                        "region_id": str(region_id or "NATIONAL"),
+                        "source": "eso_national",
+                    }
+                    result.update(_compute_generation_summary(generation_mix))
+                    cache.set(cache_key, result, CACHE_TIMEOUT)
+                    _carbon_debug("Parsed national carbon intensity fallback intensity=%s", result["intensity"])
+                    return result
+
+        if region_id:
+            logger.warning("No live API payload available for postcode=%s region=%s. Falling back to stored forecast.", normalized_postcode, region_id)
             return _fallback_to_stored_forecast(region_id)
-        
-        region_data = data["data"][0]
-        intensity_data = region_data["data"][0]["intensity"]
-        
-        result = {
-            "intensity": float(intensity_data["forecast"]),
-            "timestamp": timezone.now(),
-            "index": intensity_data["index"],
-            "region_id": region_id,
-            "source": "eso_realtime"
-        }
-        generation_mix = _get_current_generation_mix(region_id)
-        result.update(_compute_generation_summary(generation_mix))
-        
-        cache.set(cache_key, result, CACHE_TIMEOUT)
-        logger.info(f"Current carbon intensity for {region_id}: {result['intensity']} gCO2/kWh")
-        return result
+        logger.warning("No live API payload and no region fallback available for postcode=%s", normalized_postcode)
+        return None
         
     except requests.RequestException as e:
-        logger.error(f"API request failed for region {region_id}: {e}")
-        return _fallback_to_stored_forecast(region_id)
+        logger.error(f"API request failed for postcode={normalized_postcode} region={region_id}: {e}")
+        return _fallback_to_stored_forecast(region_id) if region_id else None
     except (KeyError, ValueError, IndexError) as e:
-        logger.error(f"Failed to parse API response for region {region_id}: {e}")
-        return _fallback_to_stored_forecast(region_id)
+        logger.error(f"Failed to parse API response for postcode={normalized_postcode} region={region_id}: {e}")
+        return _fallback_to_stored_forecast(region_id) if region_id else None
 
 
 def _fallback_to_stored_forecast(region_id: str) -> Optional[Dict[str, Any]]:
@@ -281,11 +427,18 @@ def should_trigger_modulation(building_id: int) -> tuple[bool, Optional[Dict[str
             logger.debug(f"Building {building_id} has automation disabled")
             return False, None
         
-        if not building.grid_zone_id:
-            logger.warning(f"Building {building_id} has no grid_zone_id")
+        if not building.postcode:
+            logger.warning(f"Building {building_id} has no postcode")
             return False, None
         
-        current = get_current_carbon_intensity(building.grid_zone_id)
+        current = get_current_carbon_intensity(region_id=building.grid_zone_id, postcode=building.postcode)
+        _carbon_debug(
+            "Carbon service output for building %s (postcode=%s region=%s): %s",
+            building_id,
+            building.postcode,
+            building.grid_zone_id,
+            current,
+        )
         if not current:
             logger.warning(f"Could not get carbon intensity for building {building_id}")
             return False, None

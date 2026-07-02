@@ -3,6 +3,7 @@
 from rest_framework.decorators import action
 from django.http import HttpResponse
 import csv
+import os
 from django.db import models
 from django.db import IntegrityError
 from django.core.validators import MinValueValidator
@@ -43,6 +44,15 @@ from .services.auth_verification import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _carbon_debug_enabled() -> bool:
+    return os.getenv("NETZERO_CARBON_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _carbon_debug(message, *args):
+    if _carbon_debug_enabled():
+        logger.info(message, *args)
 
 class CarbonPreferenceViewSet(viewsets.ModelViewSet):
     queryset = CarbonPreference.objects.all()
@@ -604,8 +614,11 @@ class FlexibleAssetViewSet(viewsets.ModelViewSet):
         )
 
         intensity = 0.0
-        if building.grid_zone_id:
-            current = get_current_carbon_intensity(building.grid_zone_id)
+        if building.postcode:
+            current = get_current_carbon_intensity(
+                region_id=building.grid_zone_id,
+                postcode=building.postcode,
+            )
             if current:
                 intensity = float(current.get("intensity") or 0.0)
 
@@ -843,7 +856,14 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
         )
         
         try:
+            _carbon_debug("Carbon intensity API request received for building=%s user=%s", pk, request.user)
             should_modulate, carbon_data = should_trigger_modulation(pk)
+            _carbon_debug(
+                "Carbon intensity service returned for building=%s should_modulate=%s carbon_data=%s",
+                pk,
+                should_modulate,
+                carbon_data,
+            )
             
             if carbon_data is None:
                 building = BuildingProfile.objects.get(id=pk)
@@ -853,17 +873,36 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     has_preference and
                     building.carbon_preference.automation_enabled
                 )
-                if not has_preference or not automation_enabled or not building.grid_zone_id:
+                if not has_preference or not automation_enabled or not building.postcode:
                     fallback_threshold = (
                         min(max(float(building.carbon_preference.carbon_intensity_threshold), 50.0), 500.0)
                         if has_preference else 300.0
                     )
                     current = (
-                        get_current_carbon_intensity(building.grid_zone_id)
-                        if building.grid_zone_id else None
+                        get_current_carbon_intensity(
+                            region_id=building.grid_zone_id,
+                            postcode=building.postcode,
+                        )
+                        if building.postcode else None
                     )
 
                     if current:
+                        response_payload = {
+                            "current_intensity": current["intensity"],
+                            "threshold": fallback_threshold,
+                            "index": current["index"],
+                            "region_id": current["region_id"],
+                            "timestamp": current["timestamp"],
+                            "source": current["source"],
+                            "should_modulate": False,
+                            "generation_mix": current.get("generation_mix", []),
+                            "fuel_percentages": current.get("fuel_percentages", {}),
+                            "renewable_share": current.get("renewable_share", 0.0),
+                            "fossil_share": current.get("fossil_share", 0.0),
+                            "green_score": current.get("green_score", 0),
+                            "green_score_band": current.get("green_score_band", "poor"),
+                        }
+                        _carbon_debug("Carbon intensity fallback response for building=%s payload=%s", pk, response_payload)
                         return Response({
                             "current_intensity": current["intensity"],
                             "threshold": fallback_threshold,
@@ -880,7 +919,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                             "green_score_band": current.get("green_score_band", "poor"),
                         })
 
-                    return Response({
+                    unavailable_payload = {
                         "current_intensity": 0.0,
                         "threshold": fallback_threshold,
                         "index": "unknown",
@@ -894,9 +933,11 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                         "fossil_share": 0.0,
                         "green_score": 0,
                         "green_score_band": "poor",
-                    })
+                    }
+                    logger.warning("Carbon intensity unavailable response for building=%s payload=%s", pk, unavailable_payload)
+                    return Response(unavailable_payload)
 
-                return Response({
+                unavailable_payload = {
                     "current_intensity": 0.0,
                     "threshold": (
                         min(max(float(building.carbon_preference.carbon_intensity_threshold), 50.0), 500.0)
@@ -913,9 +954,11 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "fossil_share": 0.0,
                     "green_score": 0,
                     "green_score_band": "poor",
-                })
+                }
+                logger.warning("Carbon intensity unavailable response for building=%s payload=%s", pk, unavailable_payload)
+                return Response(unavailable_payload)
             
-            return Response({
+            response_payload = {
                 "current_intensity": carbon_data["current_intensity"],
                 "threshold": carbon_data["threshold"],
                 "index": carbon_data["index"],
@@ -929,7 +972,9 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                 "fossil_share": carbon_data.get("fossil_share", 0.0),
                 "green_score": carbon_data.get("green_score", 0),
                 "green_score_band": carbon_data.get("green_score_band", "poor"),
-            })
+            }
+            _carbon_debug("Carbon intensity success response for building=%s payload=%s", pk, response_payload)
+            return Response(response_payload)
             
         except BuildingProfile.DoesNotExist:
             return Response(
@@ -1062,13 +1107,16 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            if not building.grid_zone_id:
+            if not building.postcode:
                 return Response(
-                    {"error": "Building grid zone is missing; cannot evaluate carbon intensity"},
+                    {"error": "Building postcode is missing; cannot evaluate carbon intensity"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            current = get_current_carbon_intensity(building.grid_zone_id)
+            current = get_current_carbon_intensity(
+                region_id=building.grid_zone_id,
+                postcode=building.postcode,
+            )
             if current:
                 carbon_data = {
                     "current_intensity": current["intensity"],
@@ -1083,7 +1131,7 @@ class CarbonMonitoringViewSet(viewsets.ViewSet):
                     "current_intensity": 0.0,
                     "threshold": threshold,
                     "index": "unknown",
-                    "region_id": building.grid_zone_id,
+                    "region_id": building.grid_zone_id or "UNKNOWN",
                     "timestamp": timezone.now(),
                     "source": "unavailable",
                     "generation_mix": [],

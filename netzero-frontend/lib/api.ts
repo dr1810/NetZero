@@ -1,6 +1,16 @@
 // lib/api.ts
 
 export const DJANGO_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+const CARBON_DEBUG = process.env.NEXT_PUBLIC_CARBON_DEBUG === "true";
+
+function carbonDebug(message: string, payload?: unknown) {
+  if (!CARBON_DEBUG) return;
+  if (typeof payload === "undefined") {
+    console.debug(message);
+    return;
+  }
+  console.debug(message, payload);
+}
 export interface BuildingProfile {
   id: number;
   owner?: number | null;
@@ -648,14 +658,18 @@ export interface SetAssetModulationResponse {
  * Get current carbon intensity for a building
  */
 export async function getCarbonIntensity(buildingId: number): Promise<CarbonIntensityResponse> {
+  carbonDebug('[CarbonAPI] Requesting carbon intensity', { buildingId, url: buildUrl(`/buildings/${buildingId}/carbon-intensity/`) });
   const res = await authFetch(`/buildings/${buildingId}/carbon-intensity/`);
   
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    carbonDebug('[CarbonAPI] Carbon intensity request failed', { buildingId, status: res.status, body });
     throw new Error(body || `Failed to fetch carbon intensity: ${res.status}`);
   }
-  
-  return res.json();
+
+  const data = await res.json();
+  carbonDebug('[CarbonAPI] Carbon intensity response', { buildingId, data });
+  return data;
 }
 
 /**
@@ -685,6 +699,7 @@ export async function triggerModulation(
   buildingId: number,
   dryRun: boolean = false
 ): Promise<TriggerModulationResponse> {
+  carbonDebug('[CarbonAPI] Trigger modulation request', { buildingId, dryRun, url: buildUrl(`/buildings/${buildingId}/trigger-modulation/`) });
   const res = await authFetch(`/buildings/${buildingId}/trigger-modulation/`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -693,10 +708,13 @@ export async function triggerModulation(
   
   if (!res.ok) {
     const body = await res.text().catch(() => "");
+    carbonDebug('[CarbonAPI] Trigger modulation failed', { buildingId, dryRun, status: res.status, body });
     throw new Error(body || `Failed to trigger modulation: ${res.status}`);
   }
-  
-  return res.json();
+
+  const data = await res.json();
+  carbonDebug('[CarbonAPI] Trigger modulation response', { buildingId, dryRun, data });
+  return data;
 }
 
 /**
